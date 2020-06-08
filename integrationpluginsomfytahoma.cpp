@@ -39,7 +39,7 @@ void IntegrationPluginSomfyTahoma::confirmPairing(ThingPairingInfo *info, const 
     connect(request, &SomfyTahomaPostRequest::error, info, [info](){
         info->finish(Thing::ThingErrorHardwareFailure, QT_TR_NOOP("Failed to login to Somfy Tahoma."));
     });
-    connect(request, &SomfyTahomaPostRequest::finished, info, [this, info, username, password](const QVariantMap &/*result*/){
+    connect(request, &SomfyTahomaPostRequest::finished, info, [this, info, username, password](const QVariant &/*result*/){
         pluginStorage()->beginGroup(info->thingId().toString());
         pluginStorage()->setValue("username", username);
         pluginStorage()->setValue("password", password);
@@ -60,12 +60,12 @@ void IntegrationPluginSomfyTahoma::setupThing(ThingSetupInfo *info)
         connect(request, &SomfyTahomaPostRequest::error, info, [info](){
             info->finish(Thing::ThingErrorHardwareFailure, QT_TR_NOOP("Failed to login to Somfy Tahoma."));
         });
-        connect(request, &SomfyTahomaPostRequest::finished, info, [this, info](const QVariantMap &/*result*/){
+        connect(request, &SomfyTahomaPostRequest::finished, info, [this, info](const QVariant &/*result*/){
             QUuid id = info->thing()->id();
             SomfyTahomaGetRequest *request = new SomfyTahomaGetRequest(hardwareManager()->networkManager(), "/setup", this);
-            connect(request, &SomfyTahomaGetRequest::finished, this, [this, id](const QVariantMap &result){
+            connect(request, &SomfyTahomaGetRequest::finished, this, [this, id](const QVariant &result){
                 QList<ThingDescriptor> unknownDevices;
-                foreach (const QVariant &deviceVariant, result["devices"].toList()) {
+                foreach (const QVariant &deviceVariant, result.toMap()["devices"].toList()) {
                     QVariantMap deviceMap = deviceVariant.toMap();
                     QString type = deviceMap.value("uiClass").toString();
                     QString deviceUrl = deviceMap.value("deviceURL").toString();
@@ -100,9 +100,9 @@ void IntegrationPluginSomfyTahoma::setupThing(ThingSetupInfo *info)
 void IntegrationPluginSomfyTahoma::postSetupThing(Thing *thing)
 {
     if (thing->thingClassId() == tahomaThingClassId) {
-        SomfyTahomaGetRequest *request = new SomfyTahomaGetRequest(hardwareManager()->networkManager(), "/setup", this);
-        connect(request, &SomfyTahomaGetRequest::finished, this, [this](const QVariantMap &result){
-            foreach (const QVariant &deviceVariant, result["devices"].toList()) {
+        SomfyTahomaGetRequest *setupRequest = new SomfyTahomaGetRequest(hardwareManager()->networkManager(), "/setup", this);
+        connect(setupRequest, &SomfyTahomaGetRequest::finished, this, [this](const QVariant &result){
+            foreach (const QVariant &deviceVariant, result.toMap()["devices"].toList()) {
                 QVariantMap deviceMap = deviceVariant.toMap();
                 QString type = deviceMap.value("uiClass").toString();
                 QString deviceUrl = deviceMap.value("deviceURL").toString();
@@ -120,6 +120,43 @@ void IntegrationPluginSomfyTahoma::postSetupThing(Thing *thing)
                     }
                 }
             }
+        });
+
+        SomfyTahomaPostRequest *eventRegistrationRequest = new SomfyTahomaPostRequest(hardwareManager()->networkManager(), "/events/register", "application/json", QByteArray(), this);
+        connect(eventRegistrationRequest, &SomfyTahomaPostRequest::error, this, [](){
+            qCWarning(dcSomfyTahoma()) << "Failed to register for events.";
+        });
+        connect(eventRegistrationRequest, &SomfyTahomaPostRequest::finished, this, [this](const QVariant &result){
+            QString eventListenerId = result.toMap()["id"].toString();
+
+            m_eventPollTimer = hardwareManager()->pluginTimerManager()->registerTimer(2);
+            connect(m_eventPollTimer, &PluginTimer::timeout, this, [this, eventListenerId](){
+                SomfyTahomaPostRequest *eventFetchRequest = new SomfyTahomaPostRequest(hardwareManager()->networkManager(), "/events/" + eventListenerId + "/fetch", "application/json", QByteArray(), this);
+                connect(eventFetchRequest, &SomfyTahomaPostRequest::error, this, [this](){
+                    qCWarning(dcSomfyTahoma()) << "Failed to fetch events. Stopping timer.";
+
+                    // TODO: Implement better error handling. For now stop the timer to avoid flooding the web service unnecessarily.
+                    m_eventPollTimer->stop();
+                });
+                connect(eventFetchRequest, &SomfyTahomaPostRequest::finished, this, [this](const QVariant &result){
+                    qCDebug(dcSomfyTahoma()) << "Got events:" << result;
+
+                    foreach (const QVariant &eventVariant, result.toList()) {
+                        QVariantMap eventMap = eventVariant.toMap();
+                        if (eventMap["name"] == "DeviceStateChangedEvent") {
+                            Thing *thing = myThings().findByParams(ParamList() << Param(shutterThingDeviceUrlParamTypeId, eventMap["deviceURL"]));
+                            if (thing) {
+                                foreach (const QVariant &stateVariant, eventMap["deviceStates"].toList()) {
+                                    QVariantMap stateMap = stateVariant.toMap();
+                                    if (stateMap["name"] == "core:ClosureState") {
+                                        thing->setStateValue(shutterPercentageStateTypeId, stateMap["value"]);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            });
         });
     }
 }

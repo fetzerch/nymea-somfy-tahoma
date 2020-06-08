@@ -19,6 +19,8 @@
 #define INTEGRATIONPLUGINSOMFYTAHOMA_H
 
 #include "integrations/integrationplugin.h"
+#include "plugintimer.h"
+
 
 class IntegrationPluginSomfyTahoma : public IntegrationPlugin
 {
@@ -33,6 +35,9 @@ public:
 
     void setupThing(ThingSetupInfo *info) override;
     void postSetupThing(Thing *thing) override;
+
+private:
+    PluginTimer *m_eventPollTimer = nullptr;
 };
 
 #endif // INTEGRATIONPLUGINSOMFYTAHOMA_H

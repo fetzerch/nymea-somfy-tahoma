@@ -27,11 +27,11 @@ class SomfyTahomaPostRequest : public QObject
     Q_OBJECT
 
 public:
-    SomfyTahomaPostRequest(NetworkAccessManager *networkManager, const QString &path, const QString &contentType, QByteArray &body, QObject *parent);
+    SomfyTahomaPostRequest(NetworkAccessManager *networkManager, const QString &path, const QString &contentType, const QByteArray &body, QObject *parent);
 
 signals:
     void error(QNetworkReply::NetworkError error);
-    void finished(const QVariantMap &results);
+    void finished(const QVariant &results);
 };
 
 class SomfyTahomaGetRequest : public QObject
@@ -43,7 +43,7 @@ public:
 
 signals:
     void error(QNetworkReply::NetworkError error);
-    void finished(const QVariantMap &results);
+    void finished(const QVariant &results);
 };
 
 #endif // SOMFYTAHOMAREQUESTS_H

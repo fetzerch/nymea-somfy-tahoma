@@ -23,7 +23,7 @@
 
 #include "extern-plugininfo.h"
 
-SomfyTahomaPostRequest::SomfyTahomaPostRequest(NetworkAccessManager *networkManager, const QString &path, const QString &contentType, QByteArray &body, QObject *parent):
+SomfyTahomaPostRequest::SomfyTahomaPostRequest(NetworkAccessManager *networkManager, const QString &path, const QString &contentType, const QByteArray &body, QObject *parent):
     QObject(parent)
 {
     QUrl url("https://tahomalink.com/enduser-mobile-web/enduserAPI" + path);
@@ -48,7 +48,7 @@ SomfyTahomaPostRequest::SomfyTahomaPostRequest(NetworkAccessManager *networkMana
             return;
         }
 
-        emit finished(jsonDoc.toVariant().toMap());
+        emit finished(jsonDoc.toVariant());
     });
 }
 
@@ -76,6 +76,6 @@ SomfyTahomaGetRequest::SomfyTahomaGetRequest(NetworkAccessManager *networkManage
             return;
         }
 
-        emit finished(jsonDoc.toVariant().toMap());
+        emit finished(jsonDoc.toVariant());
     });
 }
