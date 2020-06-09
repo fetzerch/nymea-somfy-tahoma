@@ -19,6 +19,7 @@
 
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonArray>
 
 #include "network/networkaccessmanager.h"
 
@@ -139,7 +140,9 @@ void IntegrationPluginSomfyTahoma::postSetupThing(Thing *thing)
                     m_eventPollTimer->stop();
                 });
                 connect(eventFetchRequest, &SomfyTahomaPostRequest::finished, this, [this](const QVariant &result){
-                    qCDebug(dcSomfyTahoma()) << "Got events:" << result;
+                    if (!result.toList().empty()) {
+                        qCDebug(dcSomfyTahoma()) << "Got events:" << result;
+                    }
 
                     foreach (const QVariant &eventVariant, result.toList()) {
                         QVariantMap eventMap = eventVariant.toMap();
@@ -153,10 +156,90 @@ void IntegrationPluginSomfyTahoma::postSetupThing(Thing *thing)
                                     }
                                 }
                             }
+                        } else if (eventMap["name"].toString() == "ExecutionRegisteredEvent") {
+                            QList<Thing *> things;
+                            foreach (const QVariant &action, eventMap["actions"].toList()) {
+                                Thing *thing = myThings().findByParams(ParamList() << Param(shutterThingDeviceUrlParamTypeId, action.toMap()["deviceURL"]));
+                                if (thing) {
+                                    qCInfo(dcSomfyTahoma()) << "Shutter execution registered. Setting moving state.";
+                                    thing->setStateValue(shutterMovingStateTypeId, true);
+                                    things.append(thing);
+                                }
+                            }
+                            qCInfo(dcSomfyTahoma()) << "ExecutionRegisteredEvent" << eventMap["execId"].toString();
+                            m_currentExecutions.insert(eventMap["execId"].toString(), things);
+                        } else if (eventMap["name"].toString() == "ExecutionStateChangedEvent" &&
+                                   (eventMap["newState"].toString() == "COMPLETED" || eventMap["newState"].toString() == "FAILED")) {
+                            QList<Thing *> things = m_currentExecutions.take(eventMap["execId"].toString());
+                            foreach (Thing *thing, things) {
+                                if (thing->thingClassId() == shutterThingClassId) {
+                                    qCInfo(dcSomfyTahoma()) << "Shutter execution finished. Clearing moving state.";
+                                    thing->setStateValue(shutterMovingStateTypeId, false);
+                                }
+                            }
+
+                            QPointer<ThingActionInfo> thingActionInfo = m_pendingActions.take(eventMap["execId"].toString());
+                            if (!thingActionInfo.isNull()) {
+                                if (eventMap["newState"].toString() == "COMPLETED") {
+                                    qCInfo(dcSomfyTahoma()) << "Action finished" << thingActionInfo->thing() << thingActionInfo->action().actionTypeId();
+                                    thingActionInfo->finish(Thing::ThingErrorNoError);
+                                } else if (eventMap["newState"].toString() == "FAILED") {
+                                    qCInfo(dcSomfyTahoma()) << "Action failed" << thingActionInfo->thing() << thingActionInfo->action().actionTypeId();
+                                    thingActionInfo->finish(Thing::ThingErrorHardwareFailure);
+                                } else {
+                                    qCWarning(dcSomfyTahoma()) << "Action in unknown state" << thingActionInfo->thing() << thingActionInfo->action().actionTypeId() << eventMap["newState"].toString();
+                                    thingActionInfo->finish(Thing::ThingErrorHardwareFailure);
+                                }
+                            }
                         }
                     }
                 });
             });
         });
+    }
+}
+
+void IntegrationPluginSomfyTahoma::executeAction(ThingActionInfo *info)
+{
+    qCInfo(dcSomfyTahoma()) << "Action request:" << info->thing() << info->action().actionTypeId() << info->action().params();
+
+    QString actionName;
+    QJsonArray actionParameters;
+
+    if (info->thing()->thingClassId() == shutterThingClassId) {
+        if (info->action().actionTypeId() == shutterPercentageActionTypeId) {
+            actionName = "setClosureAndLinearSpeed";
+            actionParameters = { info->action().param(shutterPercentageActionPercentageParamTypeId).value().toInt(), "lowspeed" };
+        } else if (info->action().actionTypeId() == shutterOpenActionTypeId) {
+            actionName = "setClosureAndLinearSpeed";
+            actionParameters = { 0, "lowspeed" };
+        } else if (info->action().actionTypeId() == shutterCloseActionTypeId) {
+            actionName = "setClosureAndLinearSpeed";
+            actionParameters = { 100, "lowspeed" };
+        } else if (info->action().actionTypeId() == shutterStopActionTypeId) {
+            actionName = "stop";
+        } else {
+            /* Intentially left blank */
+        }
+    }
+
+    if (!actionName.isEmpty()) {
+        QJsonDocument jsonRequest{QJsonObject
+        {
+            {"label", "test command"},
+            {"actions", QJsonArray{QJsonObject{{"deviceURL", info->thing()->paramValue(shutterThingDeviceUrlParamTypeId).toString()},
+                                               {"commands", QJsonArray{QJsonObject{{"name", actionName},
+                                                                                   {"parameters", actionParameters}}}}}}}
+        }};
+        SomfyTahomaPostRequest *request = new SomfyTahomaPostRequest(hardwareManager()->networkManager(), "/exec/apply", "application/json", jsonRequest.toJson(QJsonDocument::Compact), this);
+        connect(request, &SomfyTahomaPostRequest::error, info, [info](){
+            info->finish(Thing::ThingErrorHardwareFailure);
+        });
+        connect(request, &SomfyTahomaPostRequest::finished, info, [this, info](const QVariant &result){
+            qCInfo(dcSomfyTahoma()) << "Action started" << info->thing() << info->action().actionTypeId();
+            m_pendingActions.insert(result.toMap()["execId"].toString(), info);
+        });
+    } else {
+        info->finish(Thing::ThingErrorActionTypeNotFound);
     }
 }

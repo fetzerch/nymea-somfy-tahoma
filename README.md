@@ -10,8 +10,9 @@ control Somfy roller shutters and blinds through the Somfy Tahoma API.
 - [x] Login to the web service.
 - [x] Automatically discover devices on start and set initial device states.
 - [x] Listen for events and update the devices.
-- [ ] Set the moving state.
-- [ ] Control devices.
+- [x] Set the moving state.
+- [x] Control devices.
+- [ ] Support signal strength and connected states.
 - [ ] Support for venetian blinds.
 
 ## License

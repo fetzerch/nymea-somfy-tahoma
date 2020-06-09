@@ -36,8 +36,12 @@ public:
     void setupThing(ThingSetupInfo *info) override;
     void postSetupThing(Thing *thing) override;
 
+    void executeAction(ThingActionInfo *info) override;
+
 private:
     PluginTimer *m_eventPollTimer = nullptr;
+    QMap<QString, QPointer<ThingActionInfo>> m_pendingActions;
+    QMap<QString, QList<Thing *>> m_currentExecutions;
 };
 
 #endif // INTEGRATIONPLUGINSOMFYTAHOMA_H
