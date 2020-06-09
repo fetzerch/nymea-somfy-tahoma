@@ -116,6 +116,10 @@ void IntegrationPluginSomfyTahoma::postSetupThing(Thing *thing)
                             QVariantMap stateMap = stateVariant.toMap();
                             if (stateMap["name"] == "core:ClosureState") {
                                 thing->setStateValue(shutterPercentageStateTypeId, stateMap["value"]);
+                            } else if (stateMap["name"] == "core:StatusState") {
+                                thing->setStateValue(shutterConnectedStateTypeId, stateMap["value"] == "available");
+                            } else if (stateMap["name"] == "core:RSSILevelState") {
+                                thing->setStateValue(shutterSignalStrengthStateTypeId, stateMap["value"]);
                             }
                         }
                     }
@@ -153,6 +157,10 @@ void IntegrationPluginSomfyTahoma::postSetupThing(Thing *thing)
                                     QVariantMap stateMap = stateVariant.toMap();
                                     if (stateMap["name"] == "core:ClosureState") {
                                         thing->setStateValue(shutterPercentageStateTypeId, stateMap["value"]);
+                                    } else if (stateMap["name"] == "core:StatusState") {
+                                        thing->setStateValue(shutterConnectedStateTypeId, stateMap["value"] == "available");
+                                    } else if (stateMap["name"] == "core:RSSILevelState") {
+                                        thing->setStateValue(shutterSignalStrengthStateTypeId, stateMap["value"]);
                                     }
                                 }
                             }
