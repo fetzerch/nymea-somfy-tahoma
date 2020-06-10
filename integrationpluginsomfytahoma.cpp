@@ -164,7 +164,7 @@ void IntegrationPluginSomfyTahoma::postSetupThing(Thing *thing)
                                     }
                                 }
                             }
-                        } else if (eventMap["name"].toString() == "ExecutionRegisteredEvent") {
+                        } else if (eventMap["name"] == "ExecutionRegisteredEvent") {
                             QList<Thing *> things;
                             foreach (const QVariant &action, eventMap["actions"].toList()) {
                                 Thing *thing = myThings().findByParams(ParamList() << Param(shutterThingDeviceUrlParamTypeId, action.toMap()["deviceURL"]));
@@ -174,10 +174,10 @@ void IntegrationPluginSomfyTahoma::postSetupThing(Thing *thing)
                                     things.append(thing);
                                 }
                             }
-                            qCInfo(dcSomfyTahoma()) << "ExecutionRegisteredEvent" << eventMap["execId"].toString();
+                            qCInfo(dcSomfyTahoma()) << "ExecutionRegisteredEvent" << eventMap["execId"];
                             m_currentExecutions.insert(eventMap["execId"].toString(), things);
-                        } else if (eventMap["name"].toString() == "ExecutionStateChangedEvent" &&
-                                   (eventMap["newState"].toString() == "COMPLETED" || eventMap["newState"].toString() == "FAILED")) {
+                        } else if (eventMap["name"] == "ExecutionStateChangedEvent" &&
+                                   (eventMap["newState"] == "COMPLETED" || eventMap["newState"] == "FAILED")) {
                             QList<Thing *> things = m_currentExecutions.take(eventMap["execId"].toString());
                             foreach (Thing *thing, things) {
                                 if (thing->thingClassId() == shutterThingClassId) {
@@ -188,10 +188,10 @@ void IntegrationPluginSomfyTahoma::postSetupThing(Thing *thing)
 
                             QPointer<ThingActionInfo> thingActionInfo = m_pendingActions.take(eventMap["execId"].toString());
                             if (!thingActionInfo.isNull()) {
-                                if (eventMap["newState"].toString() == "COMPLETED") {
+                                if (eventMap["newState"] == "COMPLETED") {
                                     qCInfo(dcSomfyTahoma()) << "Action finished" << thingActionInfo->thing() << thingActionInfo->action().actionTypeId();
                                     thingActionInfo->finish(Thing::ThingErrorNoError);
-                                } else if (eventMap["newState"].toString() == "FAILED") {
+                                } else if (eventMap["newState"] == "FAILED") {
                                     qCInfo(dcSomfyTahoma()) << "Action failed" << thingActionInfo->thing() << thingActionInfo->action().actionTypeId();
                                     thingActionInfo->finish(Thing::ThingErrorHardwareFailure);
                                 } else {
