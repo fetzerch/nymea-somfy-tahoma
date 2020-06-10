@@ -17,7 +17,7 @@
                 },
                 {
                     "id": "6b187fe0-a987-462d-90ac-c48efc0d0fc0",
-                    "name": "shutter",
+                    "name": "rollershutter",
                     "displayName": "Roller Shutter",
                     "createMethods": ["auto"],
                     "interfaces": ["extendedshutter", "wirelessconnectable"],
