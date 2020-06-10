@@ -13,7 +13,34 @@
                     "name": "tahoma",
                     "displayName": "Tahoma",
                     "createMethods": ["user"],
-                    "setupMethod": "userandpassword"
+                    "setupMethod": "userandpassword",
+                    "interfaces": ["account"],
+                    "stateTypes": [
+                        {
+                            "id": "10ebf650-a93a-4ee3-945b-fba10d4e35a5",
+                            "name": "connected",
+                            "displayName": "Connected",
+                            "type": "bool",
+                            "displayNameEvent": "Connetion state changed",
+                            "defaultValue": false
+                        },
+                        {
+                            "id": "97fefa85-db79-4efd-8d83-4a15d72996e1",
+                            "name": "loggedIn",
+                            "displayName": "Logged in",
+                            "type": "bool",
+                            "displayNameEvent": "Login state changed",
+                            "defaultValue": false
+                        },
+                        {
+                            "id": "75609987-be60-4932-94f6-ead791b5fa58",
+                            "name": "userDisplayName",
+                            "displayName": "User display name",
+                            "type": "QString",
+                            "displayNameEvent": "User display name changed",
+                            "defaultValue": ""
+                        }
+                    ]
                 },
                 {
                     "id": "6b187fe0-a987-462d-90ac-c48efc0d0fc0",

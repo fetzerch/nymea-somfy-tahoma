@@ -55,6 +55,7 @@ void IntegrationPluginSomfyTahoma::setupThing(ThingSetupInfo *info)
         QByteArray body;
         pluginStorage()->beginGroup(info->thing()->id().toString());
         body.append("userId=" + pluginStorage()->value("username").toString());
+        info->thing()->setStateValue(tahomaUserDisplayNameStateTypeId, pluginStorage()->value("username"));
         body.append("&userPassword=" + pluginStorage()->value("password").toString());
         pluginStorage()->endGroup();
         SomfyTahomaPostRequest *request = new SomfyTahomaPostRequest(hardwareManager()->networkManager(), "/login", "application/x-www-form-urlencoded", body, this);
@@ -62,6 +63,8 @@ void IntegrationPluginSomfyTahoma::setupThing(ThingSetupInfo *info)
             info->finish(Thing::ThingErrorHardwareFailure, QT_TR_NOOP("Failed to login to Somfy Tahoma."));
         });
         connect(request, &SomfyTahomaPostRequest::finished, info, [this, info](const QVariant &/*result*/){
+            info->thing()->setStateValue(tahomaLoggedInStateTypeId, true);
+            info->thing()->setStateValue(tahomaConnectedStateTypeId, true);
             QUuid id = info->thing()->id();
             SomfyTahomaGetRequest *request = new SomfyTahomaGetRequest(hardwareManager()->networkManager(), "/setup", this);
             connect(request, &SomfyTahomaGetRequest::finished, this, [this, id](const QVariant &result){
