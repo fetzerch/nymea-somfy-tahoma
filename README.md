@@ -13,8 +13,11 @@ control Somfy roller shutters and blinds through the Somfy Tahoma API.
 - [x] Set the moving state.
 - [x] Control devices.
 - [x] Support signal strength and connected states.
-- [ ] Implement error cases: gateway not reachable, web service failure
 - [x] Support for venetian blinds.
+- [ ] Add Gateway as separate device (with state and button).
+- [ ] Error case: Gateway not reachable
+- [ ] Error case: Web service not reachable
+- [ ] Error case: Authentication issue
 
 ## License
 
