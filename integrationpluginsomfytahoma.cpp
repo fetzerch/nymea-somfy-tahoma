@@ -77,9 +77,9 @@ void IntegrationPluginSomfyTahoma::setupThing(ThingSetupInfo *info)
                     if (type == QStringLiteral("RollerShutter")) {
                         Thing *thing = myThings().findByParams(ParamList() << Param(rollershutterThingDeviceUrlParamTypeId, deviceUrl));
                         if (thing) {
-                            qCDebug(dcSomfyTahoma()) << "Found existing Somfy device:" << label << type << deviceUrl;
+                            qCDebug(dcSomfyTahoma()) << "Found existing roller shutter:" << label << deviceUrl;
                         } else {
-                            qCInfo(dcSomfyTahoma) << "Found new Somfy device:" << label << type << deviceUrl;
+                            qCInfo(dcSomfyTahoma) << "Found new roller shutter:" << label << deviceUrl;
                             ThingDescriptor descriptor(rollershutterThingClassId, label, QString(), id);
                             descriptor.setParams(ParamList() << Param(rollershutterThingDeviceUrlParamTypeId, deviceUrl));
                             unknownDevices.append(descriptor);
@@ -114,7 +114,7 @@ void IntegrationPluginSomfyTahoma::postSetupThing(Thing *thing)
                 if (type == QStringLiteral("RollerShutter")) {
                     Thing *thing = myThings().findByParams(ParamList() << Param(rollershutterThingDeviceUrlParamTypeId, deviceUrl));
                     if (thing) {
-                        qCDebug(dcSomfyTahoma()) << "Setting initial state existing Somfy device:" << label << deviceUrl;
+                        qCDebug(dcSomfyTahoma()) << "Setting initial state for roller shutter:" << label << deviceUrl;
                         foreach (const QVariant &stateVariant, deviceMap["states"].toList()) {
                             QVariantMap stateMap = stateVariant.toMap();
                             if (stateMap["name"] == "core:ClosureState") {
@@ -172,7 +172,7 @@ void IntegrationPluginSomfyTahoma::postSetupThing(Thing *thing)
                             foreach (const QVariant &action, eventMap["actions"].toList()) {
                                 Thing *thing = myThings().findByParams(ParamList() << Param(rollershutterThingDeviceUrlParamTypeId, action.toMap()["deviceURL"]));
                                 if (thing) {
-                                    qCInfo(dcSomfyTahoma()) << "Shutter execution registered. Setting moving state.";
+                                    qCInfo(dcSomfyTahoma()) << "Roller shutter execution registered. Setting moving state.";
                                     thing->setStateValue(rollershutterMovingStateTypeId, true);
                                     things.append(thing);
                                 }
@@ -184,7 +184,7 @@ void IntegrationPluginSomfyTahoma::postSetupThing(Thing *thing)
                             QList<Thing *> things = m_currentExecutions.take(eventMap["execId"].toString());
                             foreach (Thing *thing, things) {
                                 if (thing->thingClassId() == rollershutterThingClassId) {
-                                    qCInfo(dcSomfyTahoma()) << "Shutter execution finished. Clearing moving state.";
+                                    qCInfo(dcSomfyTahoma()) << "Roller shutter execution finished. Clearing moving state.";
                                     thing->setStateValue(rollershutterMovingStateTypeId, false);
                                 }
                             }
