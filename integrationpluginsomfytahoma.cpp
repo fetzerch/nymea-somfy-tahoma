@@ -229,8 +229,6 @@ void IntegrationPluginSomfyTahoma::executeAction(ThingActionInfo *info)
             actionParameters = { 100, "lowspeed" };
         } else if (info->action().actionTypeId() == rollershutterStopActionTypeId) {
             actionName = "stop";
-        } else {
-            /* Intentially left blank */
         }
     }
 
