@@ -14,7 +14,7 @@ control Somfy roller shutters and blinds through the Somfy Tahoma API.
 - [x] Control devices.
 - [x] Support signal strength and connected states.
 - [ ] Implement error cases: gateway not reachable, web service failure
-- [ ] Support for venetian blinds.
+- [x] Support for venetian blinds.
 
 ## License
 

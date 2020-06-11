@@ -113,7 +113,94 @@
                             "displayName": "Close"
                         }
                     ]
+                },
+                {
+                    "id": "c7160205-d864-4194-b418-060fff60f0cb",
+                    "name": "venetianblind",
+                    "displayName": "Venetian Blind",
+                    "createMethods": ["auto"],
+                    "interfaces": ["venetianblind", "wirelessconnectable"],
+                    "paramTypes": [
+                        {
+                            "id": "e2541b7b-fbfa-4659-87b1-35d8993714c9",
+                            "displayName": "Device URL",
+                            "name": "deviceUrl",
+                            "type": "QString"
+                        }
+                    ],
+                    "stateTypes": [
+                        {
+                            "id": "77ca50db-42a7-4434-83e2-8b5fc4438924",
+                            "name": "percentage",
+                            "displayName": "Percentage",
+                            "type": "int",
+                            "unit": "Percentage",
+                            "displayNameEvent": "Percentage changed",
+                            "writable": true,
+                            "displayNameAction": "Set percentage",
+                            "defaultValue": 0
+                        },
+                        {
+                            "id": "079c7a80-8a1c-4fd7-b40c-6800120c70fb",
+                            "name": "angle",
+                            "displayName": "Angle",
+                            "type": "int",
+                            "unit": "Degree",
+                            "displayNameEvent": "Angle changed",
+                            "writable": true,
+                            "displayNameAction": "Set angle",
+                            "defaultValue": 0,
+                            "minValue": -90,
+                            "maxValue": 90
+                        },
+                        {
+                            "id": "48d5de0a-11ab-4801-94e4-a1dd458c341d",
+                            "name": "moving",
+                            "type": "bool",
+                            "defaultValue": false,
+                            "displayName": "Moving",
+                            "displayNameEvent": "Moving changed"
+                        },
+                        {
+                            "id": "aee4f4e3-3445-441d-bdbb-631b0c5db942",
+                            "name": "signalStrength",
+                            "displayName": "Signal strength",
+                            "type": "uint",
+                            "unit": "Percentage",
+                            "displayNameEvent": "Signal strength changed",
+                            "minValue": 0,
+                            "maxValue": 100,
+                            "defaultValue": 0
+                        },
+                        {
+                            "id": "57361115-edbe-49fb-9847-408b571d3108",
+                            "name": "connected",
+                            "displayName": "Connected",
+                            "type": "bool",
+                            "displayNameEvent": "Connetion state changed",
+                            "defaultValue": false
+                        }
+                    ],
+                    "actionTypes": [
+                        {
+                            "id": "004e7294-59e6-498b-a0aa-e58eaeefdf2b",
+                            "name": "open",
+                            "displayName": "Open"
+                        },
+                        {
+                            "id": "31b07407-65ef-4fd1-880b-b5d9f69a9d07",
+                            "name": "stop",
+                            "displayName": "Stop"
+                        },
+                        {
+                            "id": "1a9707e7-9d64-4237-b150-234edcfed12a",
+                            "name": "close",
+                            "displayName": "Close"
+                        }
+                    ]
                 }
+
+
             ]
         }
     ]

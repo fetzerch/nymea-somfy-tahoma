@@ -84,6 +84,17 @@ void IntegrationPluginSomfyTahoma::setupThing(ThingSetupInfo *info)
                             descriptor.setParams(ParamList() << Param(rollershutterThingDeviceUrlParamTypeId, deviceUrl));
                             unknownDevices.append(descriptor);
                         }
+                    } else if (type == QStringLiteral("ExteriorVenetianBlind")) {
+                            Thing *thing = myThings().findByParams(ParamList() << Param(venetianblindThingDeviceUrlParamTypeId, deviceUrl));
+                            if (thing) {
+                                qCDebug(dcSomfyTahoma()) << "Found existing venetian blind:" << label << deviceUrl;
+                            } else {
+                                qCInfo(dcSomfyTahoma) << "Found new venetian blind:" << label << deviceUrl;
+                                ThingDescriptor descriptor(venetianblindThingClassId, label, QString(), id);
+                                descriptor.setParams(ParamList() << Param(venetianblindThingDeviceUrlParamTypeId, deviceUrl));
+                                unknownDevices.append(descriptor);
+                            }
+
                     } else {
                         qCDebug(dcSomfyTahoma()) << "Found unsupperted Somfy device:" << label << type << deviceUrl;
                     }
@@ -96,7 +107,8 @@ void IntegrationPluginSomfyTahoma::setupThing(ThingSetupInfo *info)
         });
     }
 
-    else if (info->thing()->thingClassId() == rollershutterThingClassId) {
+    else if (info->thing()->thingClassId() == rollershutterThingClassId ||
+             info->thing()->thingClassId() == venetianblindThingClassId) {
         info->finish(Thing::ThingErrorNoError);
     }
 }
@@ -126,6 +138,25 @@ void IntegrationPluginSomfyTahoma::postSetupThing(Thing *thing)
                             }
                         }
                     }
+                } else if (type == QStringLiteral("ExteriorVenetianBlind")) {
+                    Thing *thing = myThings().findByParams(ParamList() << Param(venetianblindThingDeviceUrlParamTypeId, deviceUrl));
+                    if (thing) {
+                        qCDebug(dcSomfyTahoma()) << "Setting initial state for venetian blind:" << label << deviceUrl;
+                        foreach (const QVariant &stateVariant, deviceMap["states"].toList()) {
+                            QVariantMap stateMap = stateVariant.toMap();
+                            if (stateMap["name"] == "core:ClosureState") {
+                                thing->setStateValue(venetianblindPercentageStateTypeId, stateMap["value"]);
+                            } else if (stateMap["name"] == "core:SlateOrientationState") {
+                                // Convert percentage (0%/100%, 50%=open) into degree (-90/+90)
+                                int degree = (stateMap["value"].toInt() * 1.8) - 90;
+                                thing->setStateValue(venetianblindAngleStateTypeId, degree);
+                            } else if (stateMap["name"] == "core:StatusState") {
+                                thing->setStateValue(venetianblindConnectedStateTypeId, stateMap["value"] == "available");
+                            } else if (stateMap["name"] == "core:RSSILevelState") {
+                                thing->setStateValue(venetianblindSignalStrengthStateTypeId, stateMap["value"]);
+                            }
+                        }
+                    }
                 }
             }
         });
@@ -151,10 +182,11 @@ void IntegrationPluginSomfyTahoma::postSetupThing(Thing *thing)
                         qCDebug(dcSomfyTahoma()) << "Got events:" << result;
                     }
 
+                    Thing *thing;
                     foreach (const QVariant &eventVariant, result.toList()) {
                         QVariantMap eventMap = eventVariant.toMap();
                         if (eventMap["name"] == "DeviceStateChangedEvent") {
-                            Thing *thing = myThings().findByParams(ParamList() << Param(rollershutterThingDeviceUrlParamTypeId, eventMap["deviceURL"]));
+                            thing = myThings().findByParams(ParamList() << Param(rollershutterThingDeviceUrlParamTypeId, eventMap["deviceURL"]));
                             if (thing) {
                                 foreach (const QVariant &stateVariant, eventMap["deviceStates"].toList()) {
                                     QVariantMap stateMap = stateVariant.toMap();
@@ -166,14 +198,39 @@ void IntegrationPluginSomfyTahoma::postSetupThing(Thing *thing)
                                         thing->setStateValue(rollershutterSignalStrengthStateTypeId, stateMap["value"]);
                                     }
                                 }
+                                continue;
+                            }
+                            thing = myThings().findByParams(ParamList() << Param(venetianblindThingDeviceUrlParamTypeId, eventMap["deviceURL"]));
+                            if (thing) {
+                                foreach (const QVariant &stateVariant, eventMap["deviceStates"].toList()) {
+                                    QVariantMap stateMap = stateVariant.toMap();
+                                    if (stateMap["name"] == "core:ClosureState") {
+                                        thing->setStateValue(venetianblindPercentageStateTypeId, stateMap["value"]);
+                                    } else if (stateMap["name"] == "core:SlateOrientationState") {
+                                        // Convert percentage (0%/100%, 50%=open) into degree (-90/+90)
+                                        int degree = (stateMap["value"].toInt() * 1.8) - 90;
+                                        thing->setStateValue(venetianblindAngleStateTypeId, degree);
+                                    } else if (stateMap["name"] == "core:StatusState") {
+                                        thing->setStateValue(venetianblindConnectedStateTypeId, stateMap["value"] == "available");
+                                    } else if (stateMap["name"] == "core:RSSILevelState") {
+                                        thing->setStateValue(venetianblindSignalStrengthStateTypeId, stateMap["value"]);
+                                    }
+                                }
                             }
                         } else if (eventMap["name"] == "ExecutionRegisteredEvent") {
                             QList<Thing *> things;
                             foreach (const QVariant &action, eventMap["actions"].toList()) {
-                                Thing *thing = myThings().findByParams(ParamList() << Param(rollershutterThingDeviceUrlParamTypeId, action.toMap()["deviceURL"]));
+                                thing = myThings().findByParams(ParamList() << Param(rollershutterThingDeviceUrlParamTypeId, action.toMap()["deviceURL"]));
                                 if (thing) {
                                     qCInfo(dcSomfyTahoma()) << "Roller shutter execution registered. Setting moving state.";
                                     thing->setStateValue(rollershutterMovingStateTypeId, true);
+                                    things.append(thing);
+                                    continue;
+                                }
+                                thing = myThings().findByParams(ParamList() << Param(venetianblindThingDeviceUrlParamTypeId, action.toMap()["deviceURL"]));
+                                if (thing) {
+                                    qCInfo(dcSomfyTahoma()) << "Venetian blind execution registered. Setting moving state.";
+                                    thing->setStateValue(venetianblindMovingStateTypeId, true);
                                     things.append(thing);
                                 }
                             }
@@ -186,6 +243,9 @@ void IntegrationPluginSomfyTahoma::postSetupThing(Thing *thing)
                                 if (thing->thingClassId() == rollershutterThingClassId) {
                                     qCInfo(dcSomfyTahoma()) << "Roller shutter execution finished. Clearing moving state.";
                                     thing->setStateValue(rollershutterMovingStateTypeId, false);
+                                } else if (thing->thingClassId() == venetianblindThingClassId) {
+                                    qCInfo(dcSomfyTahoma()) << "Venetian blind execution finished. Clearing moving state.";
+                                    thing->setStateValue(venetianblindMovingStateTypeId, false);
                                 }
                             }
 
@@ -214,10 +274,12 @@ void IntegrationPluginSomfyTahoma::executeAction(ThingActionInfo *info)
 {
     qCInfo(dcSomfyTahoma()) << "Action request:" << info->thing() << info->action().actionTypeId() << info->action().params();
 
+    QString deviceUrl;
     QString actionName;
     QJsonArray actionParameters;
 
     if (info->thing()->thingClassId() == rollershutterThingClassId) {
+        deviceUrl = info->thing()->paramValue(rollershutterThingDeviceUrlParamTypeId).toString();
         if (info->action().actionTypeId() == rollershutterPercentageActionTypeId) {
             actionName = "setClosureAndLinearSpeed";
             actionParameters = { info->action().param(rollershutterPercentageActionPercentageParamTypeId).value().toInt(), "lowspeed" };
@@ -230,13 +292,30 @@ void IntegrationPluginSomfyTahoma::executeAction(ThingActionInfo *info)
         } else if (info->action().actionTypeId() == rollershutterStopActionTypeId) {
             actionName = "stop";
         }
+    } else if (info->thing()->thingClassId() == venetianblindThingClassId) {
+        deviceUrl = info->thing()->paramValue(venetianblindThingDeviceUrlParamTypeId).toString();
+        if (info->action().actionTypeId() == venetianblindPercentageActionTypeId) {
+            actionName = "setClosure";
+            actionParameters = { info->action().param(venetianblindPercentageActionPercentageParamTypeId).value().toInt() };
+        } else if (info->action().actionTypeId() == venetianblindAngleActionTypeId) {
+            actionName = "setOrientation";
+            // Convert degree (-90/+90) into percentage (0%/100%, 50%=open)
+            int degree = (info->action().param(venetianblindAngleActionAngleParamTypeId).value().toInt() + 90) / 1.8;
+            actionParameters = { degree };
+        } else if (info->action().actionTypeId() == venetianblindOpenActionTypeId) {
+            actionName = "open";
+        } else if (info->action().actionTypeId() == venetianblindCloseActionTypeId) {
+            actionName = "close";
+        } else if (info->action().actionTypeId() == venetianblindStopActionTypeId) {
+            actionName = "stop";
+        }
     }
 
     if (!actionName.isEmpty()) {
         QJsonDocument jsonRequest{QJsonObject
         {
             {"label", "test command"},
-            {"actions", QJsonArray{QJsonObject{{"deviceURL", info->thing()->paramValue(rollershutterThingDeviceUrlParamTypeId).toString()},
+            {"actions", QJsonArray{QJsonObject{{"deviceURL", deviceUrl},
                                                {"commands", QJsonArray{QJsonObject{{"name", actionName},
                                                                                    {"parameters", actionParameters}}}}}}}
         }};
