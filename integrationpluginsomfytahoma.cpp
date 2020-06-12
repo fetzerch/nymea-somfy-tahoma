@@ -33,14 +33,11 @@ void IntegrationPluginSomfyTahoma::startPairing(ThingPairingInfo *info)
 
 void IntegrationPluginSomfyTahoma::confirmPairing(ThingPairingInfo *info, const QString &username, const QString &password)
 {
-    QByteArray body;
-    body.append("userId=" + username);
-    body.append("&userPassword=" + password);
-    SomfyTahomaPostRequest *request = new SomfyTahomaPostRequest(hardwareManager()->networkManager(), "/login", "application/x-www-form-urlencoded", body, this);
-    connect(request, &SomfyTahomaPostRequest::error, info, [info](){
+    SomfyTahomaLoginRequest *request = new SomfyTahomaLoginRequest(hardwareManager()->networkManager(), username, password, this);
+    connect(request, &SomfyTahomaLoginRequest::error, info, [info](){
         info->finish(Thing::ThingErrorHardwareFailure, QT_TR_NOOP("Failed to login to Somfy Tahoma."));
     });
-    connect(request, &SomfyTahomaPostRequest::finished, info, [this, info, username, password](const QVariant &/*result*/){
+    connect(request, &SomfyTahomaLoginRequest::finished, info, [this, info, username, password](const QVariant &/*result*/){
         pluginStorage()->beginGroup(info->thingId().toString());
         pluginStorage()->setValue("username", username);
         pluginStorage()->setValue("password", password);
@@ -52,17 +49,11 @@ void IntegrationPluginSomfyTahoma::confirmPairing(ThingPairingInfo *info, const 
 void IntegrationPluginSomfyTahoma::setupThing(ThingSetupInfo *info)
 {
     if (info->thing()->thingClassId() == tahomaThingClassId) {
-        QByteArray body;
-        pluginStorage()->beginGroup(info->thing()->id().toString());
-        body.append("userId=" + pluginStorage()->value("username").toString());
-        info->thing()->setStateValue(tahomaUserDisplayNameStateTypeId, pluginStorage()->value("username"));
-        body.append("&userPassword=" + pluginStorage()->value("password").toString());
-        pluginStorage()->endGroup();
-        SomfyTahomaPostRequest *request = new SomfyTahomaPostRequest(hardwareManager()->networkManager(), "/login", "application/x-www-form-urlencoded", body, this);
-        connect(request, &SomfyTahomaPostRequest::error, info, [info](){
+        SomfyTahomaLoginRequest *request = createLoginRequestWithStoredCredentials(info->thing());
+        connect(request, &SomfyTahomaLoginRequest::error, info, [info](){
             info->finish(Thing::ThingErrorHardwareFailure, QT_TR_NOOP("Failed to login to Somfy Tahoma."));
         });
-        connect(request, &SomfyTahomaPostRequest::finished, info, [this, info](const QVariant &/*result*/){
+        connect(request, &SomfyTahomaLoginRequest::finished, info, [this, info](const QVariant &/*result*/){
             QUuid accountId = info->thing()->id();
             SomfyTahomaGetRequest *request = new SomfyTahomaGetRequest(hardwareManager()->networkManager(), "/setup", this);
             connect(request, &SomfyTahomaGetRequest::finished, this, [this, accountId](const QVariant &result){
@@ -194,8 +185,8 @@ void IntegrationPluginSomfyTahoma::postSetupThing(Thing *thing)
 
             m_eventPollTimer = hardwareManager()->pluginTimerManager()->registerTimer(2);
             connect(m_eventPollTimer, &PluginTimer::timeout, this, [this, eventListenerId](){
-                SomfyTahomaPostRequest *eventFetchRequest = new SomfyTahomaPostRequest(hardwareManager()->networkManager(), "/events/" + eventListenerId + "/fetch", "application/json", QByteArray(), this);
-                connect(eventFetchRequest, &SomfyTahomaPostRequest::error, this, [this](){
+                SomfyTahomaEventFetchRequest *eventFetchRequest = new SomfyTahomaEventFetchRequest(hardwareManager()->networkManager(), eventListenerId, this);
+                connect(eventFetchRequest, &SomfyTahomaEventFetchRequest::error, this, [this](){
                     qCWarning(dcSomfyTahoma()) << "Failed to fetch events. Stopping timer.";
 
                     // TODO: Implement better error handling. For now stop the timer to avoid flooding the web service unnecessarily.
@@ -370,4 +361,13 @@ void IntegrationPluginSomfyTahoma::executeAction(ThingActionInfo *info)
     } else {
         info->finish(Thing::ThingErrorActionTypeNotFound);
     }
+}
+
+SomfyTahomaLoginRequest *IntegrationPluginSomfyTahoma::createLoginRequestWithStoredCredentials(Thing *thing)
+{
+    pluginStorage()->beginGroup(thing->id().toString());
+    QString username = pluginStorage()->value("username").toString();
+    QString password = pluginStorage()->value("password").toString();
+    pluginStorage()->endGroup();
+    return new SomfyTahomaLoginRequest(hardwareManager()->networkManager(), username, password, this);
 }

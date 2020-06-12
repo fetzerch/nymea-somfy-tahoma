@@ -79,3 +79,14 @@ SomfyTahomaGetRequest::SomfyTahomaGetRequest(NetworkAccessManager *networkManage
         emit finished(jsonDoc.toVariant());
     });
 }
+
+SomfyTahomaLoginRequest::SomfyTahomaLoginRequest(NetworkAccessManager *networkManager, const QString &username, const QString &password, QObject *parent):
+    SomfyTahomaPostRequest(networkManager, "/login", "application/x-www-form-urlencoded", QString("userId=" + username + "&userPassword=" + password).toUtf8(), parent)
+{
+}
+
+
+SomfyTahomaEventFetchRequest::SomfyTahomaEventFetchRequest(NetworkAccessManager *networkManager, const QString &eventListenerId, QObject *parent):
+    SomfyTahomaPostRequest(networkManager, "/events/" + eventListenerId + "/fetch", "application/json", QByteArray(), parent)
+{
+}

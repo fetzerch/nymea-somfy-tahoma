@@ -46,4 +46,20 @@ signals:
     void finished(const QVariant &results);
 };
 
+class SomfyTahomaLoginRequest : public SomfyTahomaPostRequest
+{
+    Q_OBJECT
+
+public:
+    SomfyTahomaLoginRequest(NetworkAccessManager *networkManager, const QString &username, const QString &password, QObject *parent);
+};
+
+class SomfyTahomaEventFetchRequest : public SomfyTahomaPostRequest
+{
+    Q_OBJECT
+
+public:
+    SomfyTahomaEventFetchRequest(NetworkAccessManager *networkManager, const QString &eventListenerId, QObject *parent);
+};
+
 #endif // SOMFYTAHOMAREQUESTS_H

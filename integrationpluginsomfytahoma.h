@@ -21,6 +21,7 @@
 #include "integrations/integrationplugin.h"
 #include "plugintimer.h"
 
+class SomfyTahomaLoginRequest;
 
 class IntegrationPluginSomfyTahoma : public IntegrationPlugin
 {
@@ -37,6 +38,9 @@ public:
     void postSetupThing(Thing *thing) override;
 
     void executeAction(ThingActionInfo *info) override;
+
+private:
+    SomfyTahomaLoginRequest *createLoginRequestWithStoredCredentials(Thing *thing);
 
 private:
     PluginTimer *m_eventPollTimer = nullptr;
