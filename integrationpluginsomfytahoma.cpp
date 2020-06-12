@@ -63,24 +63,38 @@ void IntegrationPluginSomfyTahoma::setupThing(ThingSetupInfo *info)
             info->finish(Thing::ThingErrorHardwareFailure, QT_TR_NOOP("Failed to login to Somfy Tahoma."));
         });
         connect(request, &SomfyTahomaPostRequest::finished, info, [this, info](const QVariant &/*result*/){
-            info->thing()->setStateValue(tahomaLoggedInStateTypeId, true);
-            info->thing()->setStateValue(tahomaConnectedStateTypeId, true);
-            QUuid id = info->thing()->id();
+            QUuid accountId = info->thing()->id();
             SomfyTahomaGetRequest *request = new SomfyTahomaGetRequest(hardwareManager()->networkManager(), "/setup", this);
-            connect(request, &SomfyTahomaGetRequest::finished, this, [this, id](const QVariant &result){
+            connect(request, &SomfyTahomaGetRequest::finished, this, [this, accountId](const QVariant &result){
                 QList<ThingDescriptor> unknownDevices;
+                QMap<QString, QUuid> gatewayToThingId;
+                foreach (const QVariant &gatewayVariant, result.toMap()["gateways"].toList()) {
+                    QVariantMap gatewayMap = gatewayVariant.toMap();
+                    QString gatewayId = gatewayMap.value("gatewayId").toString();
+                    Thing *thing = myThings().findByParams(ParamList() << Param(gatewayThingGatewayIdParamTypeId, gatewayId));
+                    if (thing) {
+                        qCDebug(dcSomfyTahoma()) << "Found existing gateway:" << gatewayId;
+                        gatewayToThingId[gatewayId] = thing->id();
+                    } else {
+                        qCInfo(dcSomfyTahoma()) << "Found new gateway:" << gatewayId;
+                        ThingDescriptor descriptor(gatewayThingClassId, "TaHoma Gateway", QString(), accountId);
+                        descriptor.setParams(ParamList() << Param(gatewayThingGatewayIdParamTypeId, gatewayId));
+                        unknownDevices.append(descriptor);
+                        gatewayToThingId[gatewayId] = descriptor.thingId();
+                    }
+                }
                 foreach (const QVariant &deviceVariant, result.toMap()["devices"].toList()) {
                     QVariantMap deviceMap = deviceVariant.toMap();
                     QString type = deviceMap.value("uiClass").toString();
-                    QString deviceUrl = deviceMap.value("deviceURL").toString();
+                    QUrl deviceUrl = QUrl(deviceMap.value("deviceURL").toString());
                     QString label = deviceMap.value("label").toString();
                     if (type == QStringLiteral("RollerShutter")) {
                         Thing *thing = myThings().findByParams(ParamList() << Param(rollershutterThingDeviceUrlParamTypeId, deviceUrl));
                         if (thing) {
                             qCDebug(dcSomfyTahoma()) << "Found existing roller shutter:" << label << deviceUrl;
                         } else {
-                            qCInfo(dcSomfyTahoma) << "Found new roller shutter:" << label << deviceUrl;
-                            ThingDescriptor descriptor(rollershutterThingClassId, label, QString(), id);
+                            qCInfo(dcSomfyTahoma()) << "Found new roller shutter:" << label << deviceUrl;
+                            ThingDescriptor descriptor(rollershutterThingClassId, label, QString(), gatewayToThingId[deviceUrl.host()]);
                             descriptor.setParams(ParamList() << Param(rollershutterThingDeviceUrlParamTypeId, deviceUrl));
                             unknownDevices.append(descriptor);
                         }
@@ -89,8 +103,8 @@ void IntegrationPluginSomfyTahoma::setupThing(ThingSetupInfo *info)
                             if (thing) {
                                 qCDebug(dcSomfyTahoma()) << "Found existing venetian blind:" << label << deviceUrl;
                             } else {
-                                qCInfo(dcSomfyTahoma) << "Found new venetian blind:" << label << deviceUrl;
-                                ThingDescriptor descriptor(venetianblindThingClassId, label, QString(), id);
+                                qCInfo(dcSomfyTahoma()) << "Found new venetian blind:" << label << deviceUrl;
+                                ThingDescriptor descriptor(venetianblindThingClassId, label, QString(), gatewayToThingId[deviceUrl.host()]);
                                 descriptor.setParams(ParamList() << Param(venetianblindThingDeviceUrlParamTypeId, deviceUrl));
                                 unknownDevices.append(descriptor);
                             }
@@ -107,7 +121,8 @@ void IntegrationPluginSomfyTahoma::setupThing(ThingSetupInfo *info)
         });
     }
 
-    else if (info->thing()->thingClassId() == rollershutterThingClassId ||
+    else if (info->thing()->thingClassId() == gatewayThingClassId ||
+             info->thing()->thingClassId() == rollershutterThingClassId ||
              info->thing()->thingClassId() == venetianblindThingClassId) {
         info->finish(Thing::ThingErrorNoError);
     }
@@ -117,7 +132,16 @@ void IntegrationPluginSomfyTahoma::postSetupThing(Thing *thing)
 {
     if (thing->thingClassId() == tahomaThingClassId) {
         SomfyTahomaGetRequest *setupRequest = new SomfyTahomaGetRequest(hardwareManager()->networkManager(), "/setup", this);
-        connect(setupRequest, &SomfyTahomaGetRequest::finished, this, [this](const QVariant &result){
+        connect(setupRequest, &SomfyTahomaGetRequest::finished, this, [this, thing](const QVariant &result){
+            foreach (const QVariant &gatewayVariant, result.toMap()["gateways"].toList()) {
+                QVariantMap gatewayMap = gatewayVariant.toMap();
+                QString gatewayId = gatewayMap.value("gatewayId").toString();
+                Thing *thing = myThings().findByParams(ParamList() << Param(gatewayThingGatewayIdParamTypeId, gatewayId));
+                if (thing) {
+                    qCDebug(dcSomfyTahoma()) << "Setting initial state for gateway:" << gatewayId;
+                    thing->setStateValue(gatewayConnectedStateTypeId, gatewayMap["connectivity"].toMap()["status"] == "OK");
+                }
+            }
             foreach (const QVariant &deviceVariant, result.toMap()["devices"].toList()) {
                 QVariantMap deviceMap = deviceVariant.toMap();
                 QString type = deviceMap.value("uiClass").toString();
@@ -261,6 +285,22 @@ void IntegrationPluginSomfyTahoma::postSetupThing(Thing *thing)
                                     qCWarning(dcSomfyTahoma()) << "Action in unknown state" << thingActionInfo->thing() << thingActionInfo->action().actionTypeId() << eventMap["newState"].toString();
                                     thingActionInfo->finish(Thing::ThingErrorHardwareFailure);
                                 }
+                            }
+                        } else if (eventMap["name"] == "GatewayAliveEvent") {
+                            thing = myThings().findByParams(ParamList() << Param(gatewayThingGatewayIdParamTypeId, eventMap["gatewayId"]));
+                            if (thing) {
+                                qCInfo(dcSomfyTahoma()) << "Gateway connected event received:" << eventMap["gatewayId"];
+                                thing->setStateValue(gatewayConnectedStateTypeId, true);
+                            } else {
+                                qCWarning(dcSomfyTahoma()) << "Ignoring gateway connected event for unknown gateway" << eventMap["gatewayId"];
+                            }
+                        } else if (eventMap["name"] == "GatewayDownEvent") {
+                            thing = myThings().findByParams(ParamList() << Param(gatewayThingGatewayIdParamTypeId, eventMap["gatewayId"]));
+                            if (thing) {
+                                qCInfo(dcSomfyTahoma()) << "Gateway disconnected event received:" << eventMap["gatewayId"];
+                                thing->setStateValue(gatewayConnectedStateTypeId, true);
+                            } else {
+                                qCWarning(dcSomfyTahoma()) << "Ignoring gateway disconnected event for unknown gateway" << eventMap["gatewayId"];
                             }
                         }
                     }

@@ -11,7 +11,7 @@
                 {
                     "id": "fedd72b8-547d-4e4f-b73e-71344a8ba0c1",
                     "name": "tahoma",
-                    "displayName": "Tahoma",
+                    "displayName": "Tahoma Account",
                     "createMethods": ["user"],
                     "setupMethod": "userandpassword",
                     "interfaces": ["account"],
@@ -39,6 +39,31 @@
                             "type": "QString",
                             "displayNameEvent": "User display name changed",
                             "defaultValue": ""
+                        }
+                    ]
+                },
+                {
+                    "id": "6c09e0b9-f0cc-4dea-9994-9e039eff78f1",
+                    "name": "gateway",
+                    "displayName": "Tahoma Gateway",
+                    "createMethods": ["auto"],
+                    "interfaces": ["gateway"],
+                    "paramTypes": [
+                        {
+                            "id": "e321a7d6-6dcb-4a37-baf1-c7008f2d5bdb",
+                            "displayName": "Gateway Id",
+                            "name": "gatewayId",
+                            "type": "QString"
+                        }
+                    ],
+                    "stateTypes": [
+                        {
+                            "id": "18ba7fb7-c9e8-4c61-86b3-a8d3b825ed00",
+                            "name": "connected",
+                            "displayName": "Connected",
+                            "type": "bool",
+                            "displayNameEvent": "Connetion state changed",
+                            "defaultValue": false
                         }
                     ]
                 },
