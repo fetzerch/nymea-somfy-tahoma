@@ -41,6 +41,7 @@ public:
 
 private:
     SomfyTahomaLoginRequest *createLoginRequestWithStoredCredentials(Thing *thing);
+    void updateThingStates(const QString &deviceUrl, const QVariantList &stateList);
 
 private:
     PluginTimer *m_eventPollTimer = nullptr;

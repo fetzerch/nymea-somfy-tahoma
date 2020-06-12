@@ -134,45 +134,7 @@ void IntegrationPluginSomfyTahoma::postSetupThing(Thing *thing)
                 }
             }
             foreach (const QVariant &deviceVariant, result.toMap()["devices"].toList()) {
-                QVariantMap deviceMap = deviceVariant.toMap();
-                QString type = deviceMap.value("uiClass").toString();
-                QString deviceUrl = deviceMap.value("deviceURL").toString();
-                QString label = deviceMap.value("label").toString();
-                if (type == QStringLiteral("RollerShutter")) {
-                    Thing *thing = myThings().findByParams(ParamList() << Param(rollershutterThingDeviceUrlParamTypeId, deviceUrl));
-                    if (thing) {
-                        qCDebug(dcSomfyTahoma()) << "Setting initial state for roller shutter:" << label << deviceUrl;
-                        foreach (const QVariant &stateVariant, deviceMap["states"].toList()) {
-                            QVariantMap stateMap = stateVariant.toMap();
-                            if (stateMap["name"] == "core:ClosureState") {
-                                thing->setStateValue(rollershutterPercentageStateTypeId, stateMap["value"]);
-                            } else if (stateMap["name"] == "core:StatusState") {
-                                thing->setStateValue(rollershutterConnectedStateTypeId, stateMap["value"] == "available");
-                            } else if (stateMap["name"] == "core:RSSILevelState") {
-                                thing->setStateValue(rollershutterSignalStrengthStateTypeId, stateMap["value"]);
-                            }
-                        }
-                    }
-                } else if (type == QStringLiteral("ExteriorVenetianBlind")) {
-                    Thing *thing = myThings().findByParams(ParamList() << Param(venetianblindThingDeviceUrlParamTypeId, deviceUrl));
-                    if (thing) {
-                        qCDebug(dcSomfyTahoma()) << "Setting initial state for venetian blind:" << label << deviceUrl;
-                        foreach (const QVariant &stateVariant, deviceMap["states"].toList()) {
-                            QVariantMap stateMap = stateVariant.toMap();
-                            if (stateMap["name"] == "core:ClosureState") {
-                                thing->setStateValue(venetianblindPercentageStateTypeId, stateMap["value"]);
-                            } else if (stateMap["name"] == "core:SlateOrientationState") {
-                                // Convert percentage (0%/100%, 50%=open) into degree (-90/+90)
-                                int degree = (stateMap["value"].toInt() * 1.8) - 90;
-                                thing->setStateValue(venetianblindAngleStateTypeId, degree);
-                            } else if (stateMap["name"] == "core:StatusState") {
-                                thing->setStateValue(venetianblindConnectedStateTypeId, stateMap["value"] == "available");
-                            } else if (stateMap["name"] == "core:RSSILevelState") {
-                                thing->setStateValue(venetianblindSignalStrengthStateTypeId, stateMap["value"]);
-                            }
-                        }
-                    }
-                }
+                updateThingStates(deviceVariant.toMap()["deviceURL"].toString(), deviceVariant.toMap()["states"].toList());
             }
         });
 
@@ -201,37 +163,7 @@ void IntegrationPluginSomfyTahoma::postSetupThing(Thing *thing)
                     foreach (const QVariant &eventVariant, result.toList()) {
                         QVariantMap eventMap = eventVariant.toMap();
                         if (eventMap["name"] == "DeviceStateChangedEvent") {
-                            thing = myThings().findByParams(ParamList() << Param(rollershutterThingDeviceUrlParamTypeId, eventMap["deviceURL"]));
-                            if (thing) {
-                                foreach (const QVariant &stateVariant, eventMap["deviceStates"].toList()) {
-                                    QVariantMap stateMap = stateVariant.toMap();
-                                    if (stateMap["name"] == "core:ClosureState") {
-                                        thing->setStateValue(rollershutterPercentageStateTypeId, stateMap["value"]);
-                                    } else if (stateMap["name"] == "core:StatusState") {
-                                        thing->setStateValue(rollershutterConnectedStateTypeId, stateMap["value"] == "available");
-                                    } else if (stateMap["name"] == "core:RSSILevelState") {
-                                        thing->setStateValue(rollershutterSignalStrengthStateTypeId, stateMap["value"]);
-                                    }
-                                }
-                                continue;
-                            }
-                            thing = myThings().findByParams(ParamList() << Param(venetianblindThingDeviceUrlParamTypeId, eventMap["deviceURL"]));
-                            if (thing) {
-                                foreach (const QVariant &stateVariant, eventMap["deviceStates"].toList()) {
-                                    QVariantMap stateMap = stateVariant.toMap();
-                                    if (stateMap["name"] == "core:ClosureState") {
-                                        thing->setStateValue(venetianblindPercentageStateTypeId, stateMap["value"]);
-                                    } else if (stateMap["name"] == "core:SlateOrientationState") {
-                                        // Convert percentage (0%/100%, 50%=open) into degree (-90/+90)
-                                        int degree = (stateMap["value"].toInt() * 1.8) - 90;
-                                        thing->setStateValue(venetianblindAngleStateTypeId, degree);
-                                    } else if (stateMap["name"] == "core:StatusState") {
-                                        thing->setStateValue(venetianblindConnectedStateTypeId, stateMap["value"] == "available");
-                                    } else if (stateMap["name"] == "core:RSSILevelState") {
-                                        thing->setStateValue(venetianblindSignalStrengthStateTypeId, stateMap["value"]);
-                                    }
-                                }
-                            }
+                            updateThingStates(eventMap["deviceURL"].toString(), eventMap["deviceStates"].toList());
                         } else if (eventMap["name"] == "ExecutionRegisteredEvent") {
                             QList<Thing *> things;
                             foreach (const QVariant &action, eventMap["actions"].toList()) {
@@ -298,6 +230,42 @@ void IntegrationPluginSomfyTahoma::postSetupThing(Thing *thing)
                 });
             });
         });
+    }
+}
+
+void IntegrationPluginSomfyTahoma::updateThingStates(const QString &deviceUrl, const QVariantList &stateList)
+{
+    Thing *thing = myThings().findByParams(ParamList() << Param(rollershutterThingDeviceUrlParamTypeId, deviceUrl));
+    if (thing) {
+        foreach (const QVariant &stateVariant, stateList) {
+            QVariantMap stateMap = stateVariant.toMap();
+            if (stateMap["name"] == "core:ClosureState") {
+                thing->setStateValue(rollershutterPercentageStateTypeId, stateMap["value"]);
+            } else if (stateMap["name"] == "core:StatusState") {
+                thing->setStateValue(rollershutterConnectedStateTypeId, stateMap["value"] == "available");
+            } else if (stateMap["name"] == "core:RSSILevelState") {
+                thing->setStateValue(rollershutterSignalStrengthStateTypeId, stateMap["value"]);
+            }
+        }
+        return;
+    }
+    thing = myThings().findByParams(ParamList() << Param(venetianblindThingDeviceUrlParamTypeId, deviceUrl));
+    if (thing) {
+        foreach (const QVariant &stateVariant, stateList) {
+            QVariantMap stateMap = stateVariant.toMap();
+            if (stateMap["name"] == "core:ClosureState") {
+                thing->setStateValue(venetianblindPercentageStateTypeId, stateMap["value"]);
+            } else if (stateMap["name"] == "core:SlateOrientationState") {
+                // Convert percentage (0%/100%, 50%=open) into degree (-90/+90)
+                int degree = (stateMap["value"].toInt() * 1.8) - 90;
+                thing->setStateValue(venetianblindAngleStateTypeId, degree);
+            } else if (stateMap["name"] == "core:StatusState") {
+                thing->setStateValue(venetianblindConnectedStateTypeId, stateMap["value"] == "available");
+            } else if (stateMap["name"] == "core:RSSILevelState") {
+                thing->setStateValue(venetianblindSignalStrengthStateTypeId, stateMap["value"]);
+            }
+        }
+        return;
     }
 }
 
