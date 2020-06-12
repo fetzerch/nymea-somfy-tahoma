@@ -35,7 +35,7 @@ void IntegrationPluginSomfyTahoma::confirmPairing(ThingPairingInfo *info, const 
 {
     SomfyTahomaLoginRequest *request = new SomfyTahomaLoginRequest(hardwareManager()->networkManager(), username, password, this);
     connect(request, &SomfyTahomaLoginRequest::error, info, [info](){
-        info->finish(Thing::ThingErrorHardwareFailure, QT_TR_NOOP("Failed to login to Somfy Tahoma."));
+        info->finish(Thing::ThingErrorAuthenticationFailure, QT_TR_NOOP("Failed to login to Somfy Tahoma."));
     });
     connect(request, &SomfyTahomaLoginRequest::finished, info, [this, info, username, password](const QVariant &/*result*/){
         pluginStorage()->beginGroup(info->thingId().toString());
