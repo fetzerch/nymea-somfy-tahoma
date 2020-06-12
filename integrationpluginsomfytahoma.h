@@ -41,6 +41,7 @@ public:
 
 private:
     SomfyTahomaLoginRequest *createLoginRequestWithStoredCredentials(Thing *thing);
+    void handleEvents(const QVariantList &eventList);
     void updateThingStates(const QString &deviceUrl, const QVariantList &stateList);
 
 private:

@@ -156,80 +156,84 @@ void IntegrationPluginSomfyTahoma::postSetupThing(Thing *thing)
                 });
                 connect(eventFetchRequest, &SomfyTahomaPostRequest::finished, this, [this](const QVariant &result){
                     if (!result.toList().empty()) {
-                        qCDebug(dcSomfyTahoma()) << "Got events:" << result;
+                        qCDebug(dcSomfyTahoma()) << "Got events:" << result.toList();
                     }
-
-                    Thing *thing;
-                    foreach (const QVariant &eventVariant, result.toList()) {
-                        QVariantMap eventMap = eventVariant.toMap();
-                        if (eventMap["name"] == "DeviceStateChangedEvent") {
-                            updateThingStates(eventMap["deviceURL"].toString(), eventMap["deviceStates"].toList());
-                        } else if (eventMap["name"] == "ExecutionRegisteredEvent") {
-                            QList<Thing *> things;
-                            foreach (const QVariant &action, eventMap["actions"].toList()) {
-                                thing = myThings().findByParams(ParamList() << Param(rollershutterThingDeviceUrlParamTypeId, action.toMap()["deviceURL"]));
-                                if (thing) {
-                                    qCInfo(dcSomfyTahoma()) << "Roller shutter execution registered. Setting moving state.";
-                                    thing->setStateValue(rollershutterMovingStateTypeId, true);
-                                    things.append(thing);
-                                    continue;
-                                }
-                                thing = myThings().findByParams(ParamList() << Param(venetianblindThingDeviceUrlParamTypeId, action.toMap()["deviceURL"]));
-                                if (thing) {
-                                    qCInfo(dcSomfyTahoma()) << "Venetian blind execution registered. Setting moving state.";
-                                    thing->setStateValue(venetianblindMovingStateTypeId, true);
-                                    things.append(thing);
-                                }
-                            }
-                            qCInfo(dcSomfyTahoma()) << "ExecutionRegisteredEvent" << eventMap["execId"];
-                            m_currentExecutions.insert(eventMap["execId"].toString(), things);
-                        } else if (eventMap["name"] == "ExecutionStateChangedEvent" &&
-                                   (eventMap["newState"] == "COMPLETED" || eventMap["newState"] == "FAILED")) {
-                            QList<Thing *> things = m_currentExecutions.take(eventMap["execId"].toString());
-                            foreach (Thing *thing, things) {
-                                if (thing->thingClassId() == rollershutterThingClassId) {
-                                    qCInfo(dcSomfyTahoma()) << "Roller shutter execution finished. Clearing moving state.";
-                                    thing->setStateValue(rollershutterMovingStateTypeId, false);
-                                } else if (thing->thingClassId() == venetianblindThingClassId) {
-                                    qCInfo(dcSomfyTahoma()) << "Venetian blind execution finished. Clearing moving state.";
-                                    thing->setStateValue(venetianblindMovingStateTypeId, false);
-                                }
-                            }
-
-                            QPointer<ThingActionInfo> thingActionInfo = m_pendingActions.take(eventMap["execId"].toString());
-                            if (!thingActionInfo.isNull()) {
-                                if (eventMap["newState"] == "COMPLETED") {
-                                    qCInfo(dcSomfyTahoma()) << "Action finished" << thingActionInfo->thing() << thingActionInfo->action().actionTypeId();
-                                    thingActionInfo->finish(Thing::ThingErrorNoError);
-                                } else if (eventMap["newState"] == "FAILED") {
-                                    qCInfo(dcSomfyTahoma()) << "Action failed" << thingActionInfo->thing() << thingActionInfo->action().actionTypeId();
-                                    thingActionInfo->finish(Thing::ThingErrorHardwareFailure);
-                                } else {
-                                    qCWarning(dcSomfyTahoma()) << "Action in unknown state" << thingActionInfo->thing() << thingActionInfo->action().actionTypeId() << eventMap["newState"].toString();
-                                    thingActionInfo->finish(Thing::ThingErrorHardwareFailure);
-                                }
-                            }
-                        } else if (eventMap["name"] == "GatewayAliveEvent") {
-                            thing = myThings().findByParams(ParamList() << Param(gatewayThingGatewayIdParamTypeId, eventMap["gatewayId"]));
-                            if (thing) {
-                                qCInfo(dcSomfyTahoma()) << "Gateway connected event received:" << eventMap["gatewayId"];
-                                thing->setStateValue(gatewayConnectedStateTypeId, true);
-                            } else {
-                                qCWarning(dcSomfyTahoma()) << "Ignoring gateway connected event for unknown gateway" << eventMap["gatewayId"];
-                            }
-                        } else if (eventMap["name"] == "GatewayDownEvent") {
-                            thing = myThings().findByParams(ParamList() << Param(gatewayThingGatewayIdParamTypeId, eventMap["gatewayId"]));
-                            if (thing) {
-                                qCInfo(dcSomfyTahoma()) << "Gateway disconnected event received:" << eventMap["gatewayId"];
-                                thing->setStateValue(gatewayConnectedStateTypeId, true);
-                            } else {
-                                qCWarning(dcSomfyTahoma()) << "Ignoring gateway disconnected event for unknown gateway" << eventMap["gatewayId"];
-                            }
-                        }
-                    }
+                    handleEvents(result.toList());
                 });
             });
         });
+    }
+}
+
+void IntegrationPluginSomfyTahoma::handleEvents(const QVariantList &eventList)
+{
+    Thing *thing;
+    foreach (const QVariant &eventVariant, eventList) {
+        QVariantMap eventMap = eventVariant.toMap();
+        if (eventMap["name"] == "DeviceStateChangedEvent") {
+            updateThingStates(eventMap["deviceURL"].toString(), eventMap["deviceStates"].toList());
+        } else if (eventMap["name"] == "ExecutionRegisteredEvent") {
+            QList<Thing *> things;
+            foreach (const QVariant &action, eventMap["actions"].toList()) {
+                thing = myThings().findByParams(ParamList() << Param(rollershutterThingDeviceUrlParamTypeId, action.toMap()["deviceURL"]));
+                if (thing) {
+                    qCInfo(dcSomfyTahoma()) << "Roller shutter execution registered. Setting moving state.";
+                    thing->setStateValue(rollershutterMovingStateTypeId, true);
+                    things.append(thing);
+                    continue;
+                }
+                thing = myThings().findByParams(ParamList() << Param(venetianblindThingDeviceUrlParamTypeId, action.toMap()["deviceURL"]));
+                if (thing) {
+                    qCInfo(dcSomfyTahoma()) << "Venetian blind execution registered. Setting moving state.";
+                    thing->setStateValue(venetianblindMovingStateTypeId, true);
+                    things.append(thing);
+                }
+            }
+            qCInfo(dcSomfyTahoma()) << "ExecutionRegisteredEvent" << eventMap["execId"];
+            m_currentExecutions.insert(eventMap["execId"].toString(), things);
+        } else if (eventMap["name"] == "ExecutionStateChangedEvent" &&
+                   (eventMap["newState"] == "COMPLETED" || eventMap["newState"] == "FAILED")) {
+            QList<Thing *> things = m_currentExecutions.take(eventMap["execId"].toString());
+            foreach (Thing *thing, things) {
+                if (thing->thingClassId() == rollershutterThingClassId) {
+                    qCInfo(dcSomfyTahoma()) << "Roller shutter execution finished. Clearing moving state.";
+                    thing->setStateValue(rollershutterMovingStateTypeId, false);
+                } else if (thing->thingClassId() == venetianblindThingClassId) {
+                    qCInfo(dcSomfyTahoma()) << "Venetian blind execution finished. Clearing moving state.";
+                    thing->setStateValue(venetianblindMovingStateTypeId, false);
+                }
+            }
+
+            QPointer<ThingActionInfo> thingActionInfo = m_pendingActions.take(eventMap["execId"].toString());
+            if (!thingActionInfo.isNull()) {
+                if (eventMap["newState"] == "COMPLETED") {
+                    qCInfo(dcSomfyTahoma()) << "Action finished" << thingActionInfo->thing() << thingActionInfo->action().actionTypeId();
+                    thingActionInfo->finish(Thing::ThingErrorNoError);
+                } else if (eventMap["newState"] == "FAILED") {
+                    qCInfo(dcSomfyTahoma()) << "Action failed" << thingActionInfo->thing() << thingActionInfo->action().actionTypeId();
+                    thingActionInfo->finish(Thing::ThingErrorHardwareFailure);
+                } else {
+                    qCWarning(dcSomfyTahoma()) << "Action in unknown state" << thingActionInfo->thing() << thingActionInfo->action().actionTypeId() << eventMap["newState"].toString();
+                    thingActionInfo->finish(Thing::ThingErrorHardwareFailure);
+                }
+            }
+        } else if (eventMap["name"] == "GatewayAliveEvent") {
+            thing = myThings().findByParams(ParamList() << Param(gatewayThingGatewayIdParamTypeId, eventMap["gatewayId"]));
+            if (thing) {
+                qCInfo(dcSomfyTahoma()) << "Gateway connected event received:" << eventMap["gatewayId"];
+                thing->setStateValue(gatewayConnectedStateTypeId, true);
+            } else {
+                qCWarning(dcSomfyTahoma()) << "Ignoring gateway connected event for unknown gateway" << eventMap["gatewayId"];
+            }
+        } else if (eventMap["name"] == "GatewayDownEvent") {
+            thing = myThings().findByParams(ParamList() << Param(gatewayThingGatewayIdParamTypeId, eventMap["gatewayId"]));
+            if (thing) {
+                qCInfo(dcSomfyTahoma()) << "Gateway disconnected event received:" << eventMap["gatewayId"];
+                thing->setStateValue(gatewayConnectedStateTypeId, true);
+            } else {
+                qCWarning(dcSomfyTahoma()) << "Ignoring gateway disconnected event for unknown gateway" << eventMap["gatewayId"];
+            }
+        }
     }
 }
 
