@@ -44,9 +44,10 @@ private:
     void refreshAccount(Thing *thing);
     void handleEvents(const QVariantList &eventList);
     void updateThingStates(const QString &deviceUrl, const QVariantList &stateList);
+    void markDisconnected(Thing *thing);
 
 private:
-    PluginTimer *m_eventPollTimer = nullptr;
+    QMap<Thing *, PluginTimer *> m_eventPollTimer;
     QMap<QString, QPointer<ThingActionInfo>> m_pendingActions;
     QMap<QString, QList<Thing *>> m_currentExecutions;
 };

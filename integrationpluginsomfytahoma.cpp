@@ -122,14 +122,28 @@ void IntegrationPluginSomfyTahoma::setupThing(ThingSetupInfo *info)
 void IntegrationPluginSomfyTahoma::postSetupThing(Thing *thing)
 {
     if (thing->thingClassId() == tahomaThingClassId) {
+        pluginStorage()->beginGroup(thing->id().toString());
+        thing->setStateValue(tahomaUserDisplayNameStateTypeId, pluginStorage()->value("username"));
+        pluginStorage()->endGroup();
+
         refreshAccount(thing);
     }
 }
 
 void IntegrationPluginSomfyTahoma::refreshAccount(Thing *thing)
 {
+    // Ensure that even't polling doesn't interfere the refreshing.
+    if (m_eventPollTimer.contains(thing)) {
+        hardwareManager()->pluginTimerManager()->unregisterTimer(m_eventPollTimer[thing]);
+    }
+
     SomfyTahomaGetRequest *setupRequest = new SomfyTahomaGetRequest(hardwareManager()->networkManager(), "/setup", this);
+    connect(setupRequest, &SomfyTahomaGetRequest::error, this, [this, thing](){
+        markDisconnected(thing);
+    });
     connect(setupRequest, &SomfyTahomaGetRequest::finished, this, [this, thing](const QVariant &result){
+        thing->setStateValue(tahomaLoggedInStateTypeId, true);
+        thing->setStateValue(tahomaConnectedStateTypeId, true);
         foreach (const QVariant &gatewayVariant, result.toMap()["gateways"].toList()) {
             QVariantMap gatewayMap = gatewayVariant.toMap();
             QString gatewayId = gatewayMap.value("gatewayId").toString();
@@ -145,24 +159,39 @@ void IntegrationPluginSomfyTahoma::refreshAccount(Thing *thing)
     });
 
     SomfyTahomaPostRequest *eventRegistrationRequest = new SomfyTahomaPostRequest(hardwareManager()->networkManager(), "/events/register", "application/json", QByteArray(), this);
-    connect(eventRegistrationRequest, &SomfyTahomaPostRequest::error, this, [](){
+    connect(eventRegistrationRequest, &SomfyTahomaPostRequest::error, this, [this, thing](){
         qCWarning(dcSomfyTahoma()) << "Failed to register for events.";
+        markDisconnected(thing);
     });
-    connect(eventRegistrationRequest, &SomfyTahomaPostRequest::finished, this, [this](const QVariant &result){
+    connect(eventRegistrationRequest, &SomfyTahomaPostRequest::finished, this, [this, thing](const QVariant &result){
+        thing->setStateValue(tahomaConnectedStateTypeId, true);
         QString eventListenerId = result.toMap()["id"].toString();
-
-        m_eventPollTimer = hardwareManager()->pluginTimerManager()->registerTimer(2);
-        connect(m_eventPollTimer, &PluginTimer::timeout, this, [this, eventListenerId](){
+        m_eventPollTimer[thing] = hardwareManager()->pluginTimerManager()->registerTimer(2 /*sec*/);
+        connect(m_eventPollTimer[thing], &PluginTimer::timeout, this, [this, thing, eventListenerId](){
             SomfyTahomaEventFetchRequest *eventFetchRequest = new SomfyTahomaEventFetchRequest(hardwareManager()->networkManager(), eventListenerId, this);
-            connect(eventFetchRequest, &SomfyTahomaEventFetchRequest::error, this, [this](){
-                qCWarning(dcSomfyTahoma()) << "Failed to fetch events. Stopping timer.";
-
-                // TODO: Implement better error handling. For now stop the timer to avoid flooding the web service unnecessarily.
-                m_eventPollTimer->stop();
+            connect(eventFetchRequest, &SomfyTahomaEventFetchRequest::error, this, [this, thing](QNetworkReply::NetworkError error){
+                markDisconnected(thing);
+                if (error == QNetworkReply::AuthenticationRequiredError) {
+                    qCWarning(dcSomfyTahoma()) << "Failed to fetch events: Authentication expired, reauthenticating";
+                    SomfyTahomaLoginRequest *request = createLoginRequestWithStoredCredentials(thing);
+                    connect(request, &SomfyTahomaLoginRequest::error, this, [this, thing](){
+                        // This is a fatal error. The user needs to reconfigure the account to provide new credentials.
+                        qCWarning(dcSomfyTahoma()) << "Failed to reauthenticate";
+                        hardwareManager()->pluginTimerManager()->unregisterTimer(m_eventPollTimer[thing]);
+                        m_eventPollTimer.remove(thing);
+                    });
+                    connect(request, &SomfyTahomaLoginRequest::finished, this, [this, thing](const QVariant &/*result*/){
+                        qCInfo(dcSomfyTahoma()) << "Reauthentication successful";
+                        refreshAccount(thing);
+                    });
+                } else {
+                    qCWarning(dcSomfyTahoma()) << "Failed to fetch events:" << error;
+                }
             });
-            connect(eventFetchRequest, &SomfyTahomaPostRequest::finished, this, [this](const QVariant &result){
+            connect(eventFetchRequest, &SomfyTahomaEventFetchRequest::finished, this, [this, thing](const QVariant &result){
+                thing->setStateValue(tahomaConnectedStateTypeId, true);
                 if (!result.toList().empty()) {
-                    qCDebug(dcSomfyTahoma()) << "Got events:" << result.toList();
+                    qCDebug(dcSomfyTahoma()) << "Got events:" << result;
                 }
                 handleEvents(result.toList());
             });
@@ -227,6 +256,7 @@ void IntegrationPluginSomfyTahoma::handleEvents(const QVariantList &eventList)
             if (thing) {
                 qCInfo(dcSomfyTahoma()) << "Gateway connected event received:" << eventMap["gatewayId"];
                 thing->setStateValue(gatewayConnectedStateTypeId, true);
+                refreshAccount(myThings().findById(thing->parentId()));
             } else {
                 qCWarning(dcSomfyTahoma()) << "Ignoring gateway connected event for unknown gateway" << eventMap["gatewayId"];
             }
@@ -234,7 +264,8 @@ void IntegrationPluginSomfyTahoma::handleEvents(const QVariantList &eventList)
             thing = myThings().findByParams(ParamList() << Param(gatewayThingGatewayIdParamTypeId, eventMap["gatewayId"]));
             if (thing) {
                 qCInfo(dcSomfyTahoma()) << "Gateway disconnected event received:" << eventMap["gatewayId"];
-                thing->setStateValue(gatewayConnectedStateTypeId, true);
+                thing->setStateValue(gatewayConnectedStateTypeId, false);
+                markDisconnected(thing);
             } else {
                 qCWarning(dcSomfyTahoma()) << "Ignoring gateway disconnected event for unknown gateway" << eventMap["gatewayId"];
             }
@@ -347,4 +378,20 @@ SomfyTahomaLoginRequest *IntegrationPluginSomfyTahoma::createLoginRequestWithSto
     QString password = pluginStorage()->value("password").toString();
     pluginStorage()->endGroup();
     return new SomfyTahomaLoginRequest(hardwareManager()->networkManager(), username, password, this);
+}
+
+void IntegrationPluginSomfyTahoma::markDisconnected(Thing *thing)
+{
+    if (thing->thingClassId() == tahomaThingClassId) {
+        thing->setStateValue(tahomaConnectedStateTypeId, false);
+    } else if (thing->thingClassId() == gatewayThingClassId) {
+        thing->setStateValue(gatewayConnectedStateTypeId, false);
+    } else if (thing->thingClassId() == rollershutterThingClassId) {
+        thing->setStateValue(rollershutterConnectedStateTypeId, false);
+    } else if (thing->thingClassId() == venetianblindThingClassId) {
+        thing->setStateValue(venetianblindConnectedStateTypeId, false);
+    }
+    foreach (Thing *thing, myThings().filterByParentId(thing->id())) {
+        markDisconnected(thing);
+    }
 }
