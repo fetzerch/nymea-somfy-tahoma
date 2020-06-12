@@ -122,47 +122,52 @@ void IntegrationPluginSomfyTahoma::setupThing(ThingSetupInfo *info)
 void IntegrationPluginSomfyTahoma::postSetupThing(Thing *thing)
 {
     if (thing->thingClassId() == tahomaThingClassId) {
-        SomfyTahomaGetRequest *setupRequest = new SomfyTahomaGetRequest(hardwareManager()->networkManager(), "/setup", this);
-        connect(setupRequest, &SomfyTahomaGetRequest::finished, this, [this, thing](const QVariant &result){
-            foreach (const QVariant &gatewayVariant, result.toMap()["gateways"].toList()) {
-                QVariantMap gatewayMap = gatewayVariant.toMap();
-                QString gatewayId = gatewayMap.value("gatewayId").toString();
-                Thing *thing = myThings().findByParams(ParamList() << Param(gatewayThingGatewayIdParamTypeId, gatewayId));
-                if (thing) {
-                    qCDebug(dcSomfyTahoma()) << "Setting initial state for gateway:" << gatewayId;
-                    thing->setStateValue(gatewayConnectedStateTypeId, gatewayMap["connectivity"].toMap()["status"] == "OK");
+        refreshAccount(thing);
+    }
+}
+
+void IntegrationPluginSomfyTahoma::refreshAccount(Thing *thing)
+{
+    SomfyTahomaGetRequest *setupRequest = new SomfyTahomaGetRequest(hardwareManager()->networkManager(), "/setup", this);
+    connect(setupRequest, &SomfyTahomaGetRequest::finished, this, [this, thing](const QVariant &result){
+        foreach (const QVariant &gatewayVariant, result.toMap()["gateways"].toList()) {
+            QVariantMap gatewayMap = gatewayVariant.toMap();
+            QString gatewayId = gatewayMap.value("gatewayId").toString();
+            Thing *thing = myThings().findByParams(ParamList() << Param(gatewayThingGatewayIdParamTypeId, gatewayId));
+            if (thing) {
+                qCDebug(dcSomfyTahoma()) << "Setting initial state for gateway:" << gatewayId;
+                thing->setStateValue(gatewayConnectedStateTypeId, gatewayMap["connectivity"].toMap()["status"] == "OK");
+            }
+        }
+        foreach (const QVariant &deviceVariant, result.toMap()["devices"].toList()) {
+            updateThingStates(deviceVariant.toMap()["deviceURL"].toString(), deviceVariant.toMap()["states"].toList());
+        }
+    });
+
+    SomfyTahomaPostRequest *eventRegistrationRequest = new SomfyTahomaPostRequest(hardwareManager()->networkManager(), "/events/register", "application/json", QByteArray(), this);
+    connect(eventRegistrationRequest, &SomfyTahomaPostRequest::error, this, [](){
+        qCWarning(dcSomfyTahoma()) << "Failed to register for events.";
+    });
+    connect(eventRegistrationRequest, &SomfyTahomaPostRequest::finished, this, [this](const QVariant &result){
+        QString eventListenerId = result.toMap()["id"].toString();
+
+        m_eventPollTimer = hardwareManager()->pluginTimerManager()->registerTimer(2);
+        connect(m_eventPollTimer, &PluginTimer::timeout, this, [this, eventListenerId](){
+            SomfyTahomaEventFetchRequest *eventFetchRequest = new SomfyTahomaEventFetchRequest(hardwareManager()->networkManager(), eventListenerId, this);
+            connect(eventFetchRequest, &SomfyTahomaEventFetchRequest::error, this, [this](){
+                qCWarning(dcSomfyTahoma()) << "Failed to fetch events. Stopping timer.";
+
+                // TODO: Implement better error handling. For now stop the timer to avoid flooding the web service unnecessarily.
+                m_eventPollTimer->stop();
+            });
+            connect(eventFetchRequest, &SomfyTahomaPostRequest::finished, this, [this](const QVariant &result){
+                if (!result.toList().empty()) {
+                    qCDebug(dcSomfyTahoma()) << "Got events:" << result.toList();
                 }
-            }
-            foreach (const QVariant &deviceVariant, result.toMap()["devices"].toList()) {
-                updateThingStates(deviceVariant.toMap()["deviceURL"].toString(), deviceVariant.toMap()["states"].toList());
-            }
-        });
-
-        SomfyTahomaPostRequest *eventRegistrationRequest = new SomfyTahomaPostRequest(hardwareManager()->networkManager(), "/events/register", "application/json", QByteArray(), this);
-        connect(eventRegistrationRequest, &SomfyTahomaPostRequest::error, this, [](){
-            qCWarning(dcSomfyTahoma()) << "Failed to register for events.";
-        });
-        connect(eventRegistrationRequest, &SomfyTahomaPostRequest::finished, this, [this](const QVariant &result){
-            QString eventListenerId = result.toMap()["id"].toString();
-
-            m_eventPollTimer = hardwareManager()->pluginTimerManager()->registerTimer(2);
-            connect(m_eventPollTimer, &PluginTimer::timeout, this, [this, eventListenerId](){
-                SomfyTahomaEventFetchRequest *eventFetchRequest = new SomfyTahomaEventFetchRequest(hardwareManager()->networkManager(), eventListenerId, this);
-                connect(eventFetchRequest, &SomfyTahomaEventFetchRequest::error, this, [this](){
-                    qCWarning(dcSomfyTahoma()) << "Failed to fetch events. Stopping timer.";
-
-                    // TODO: Implement better error handling. For now stop the timer to avoid flooding the web service unnecessarily.
-                    m_eventPollTimer->stop();
-                });
-                connect(eventFetchRequest, &SomfyTahomaPostRequest::finished, this, [this](const QVariant &result){
-                    if (!result.toList().empty()) {
-                        qCDebug(dcSomfyTahoma()) << "Got events:" << result.toList();
-                    }
-                    handleEvents(result.toList());
-                });
+                handleEvents(result.toList());
             });
         });
-    }
+    });
 }
 
 void IntegrationPluginSomfyTahoma::handleEvents(const QVariantList &eventList)
