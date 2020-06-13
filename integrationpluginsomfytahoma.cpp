@@ -181,9 +181,9 @@ void IntegrationPluginSomfyTahoma::refreshAccount(Thing *thing)
         thing->setStateValue(tahomaConnectedStateTypeId, true);
         QString eventListenerId = result.toMap()["id"].toString();
         m_eventPollTimer[thing] = hardwareManager()->pluginTimerManager()->registerTimer(2 /*sec*/);
-        connect(m_eventPollTimer[thing], &PluginTimer::timeout, this, [this, thing, eventListenerId](){
+        connect(m_eventPollTimer[thing], &PluginTimer::timeout, thing, [this, thing, eventListenerId](){
             SomfyTahomaEventFetchRequest *eventFetchRequest = new SomfyTahomaEventFetchRequest(hardwareManager()->networkManager(), eventListenerId, this);
-            connect(eventFetchRequest, &SomfyTahomaEventFetchRequest::error, this, [this, thing](QNetworkReply::NetworkError error){
+            connect(eventFetchRequest, &SomfyTahomaEventFetchRequest::error, thing, [this, thing](QNetworkReply::NetworkError error){
                 markDisconnected(thing);
                 if (error == QNetworkReply::AuthenticationRequiredError) {
                     qCWarning(dcSomfyTahoma()) << "Failed to fetch events: Authentication expired, reauthenticating";
@@ -202,7 +202,7 @@ void IntegrationPluginSomfyTahoma::refreshAccount(Thing *thing)
                     qCWarning(dcSomfyTahoma()) << "Failed to fetch events:" << error;
                 }
             });
-            connect(eventFetchRequest, &SomfyTahomaEventFetchRequest::finished, this, [this, thing](const QVariant &result){
+            connect(eventFetchRequest, &SomfyTahomaEventFetchRequest::finished, thing, [this, thing](const QVariant &result){
                 thing->setStateValue(tahomaConnectedStateTypeId, true);
                 if (!result.toList().empty()) {
                     qCDebug(dcSomfyTahoma()) << "Got events:" << result;
@@ -211,6 +211,11 @@ void IntegrationPluginSomfyTahoma::refreshAccount(Thing *thing)
             });
         });
     });
+}
+
+void IntegrationPluginSomfyTahoma::thingRemoved(Thing *thing)
+{
+    m_eventPollTimer.remove(thing);
 }
 
 void IntegrationPluginSomfyTahoma::handleEvents(const QVariantList &eventList)
