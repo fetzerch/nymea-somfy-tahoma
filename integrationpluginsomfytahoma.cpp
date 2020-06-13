@@ -58,26 +58,23 @@ void IntegrationPluginSomfyTahoma::setupThing(ThingSetupInfo *info)
             SomfyTahomaGetRequest *request = new SomfyTahomaGetRequest(hardwareManager()->networkManager(), "/setup", this);
             connect(request, &SomfyTahomaGetRequest::finished, this, [this, accountId](const QVariant &result){
                 QList<ThingDescriptor> unknownDevices;
-                QMap<QString, QUuid> gatewayToThingId;
                 foreach (const QVariant &gatewayVariant, result.toMap()["gateways"].toList()) {
                     QVariantMap gatewayMap = gatewayVariant.toMap();
                     QString gatewayId = gatewayMap.value("gatewayId").toString();
                     Thing *thing = myThings().findByParams(ParamList() << Param(gatewayThingGatewayIdParamTypeId, gatewayId));
                     if (thing) {
                         qCDebug(dcSomfyTahoma()) << "Found existing gateway:" << gatewayId;
-                        gatewayToThingId[gatewayId] = thing->id();
                     } else {
                         qCInfo(dcSomfyTahoma()) << "Found new gateway:" << gatewayId;
                         ThingDescriptor descriptor(gatewayThingClassId, "TaHoma Gateway", QString(), accountId);
                         descriptor.setParams(ParamList() << Param(gatewayThingGatewayIdParamTypeId, gatewayId));
                         unknownDevices.append(descriptor);
-                        gatewayToThingId[gatewayId] = descriptor.thingId();
                     }
                 }
                 foreach (const QVariant &deviceVariant, result.toMap()["devices"].toList()) {
                     QVariantMap deviceMap = deviceVariant.toMap();
                     QString type = deviceMap.value("uiClass").toString();
-                    QUrl deviceUrl = QUrl(deviceMap.value("deviceURL").toString());
+                    QString deviceUrl = deviceMap.value("deviceURL").toString();
                     QString label = deviceMap.value("label").toString();
                     if (type == QStringLiteral("RollerShutter")) {
                         Thing *thing = myThings().findByParams(ParamList() << Param(rollershutterThingDeviceUrlParamTypeId, deviceUrl));
@@ -85,7 +82,7 @@ void IntegrationPluginSomfyTahoma::setupThing(ThingSetupInfo *info)
                             qCDebug(dcSomfyTahoma()) << "Found existing roller shutter:" << label << deviceUrl;
                         } else {
                             qCInfo(dcSomfyTahoma()) << "Found new roller shutter:" << label << deviceUrl;
-                            ThingDescriptor descriptor(rollershutterThingClassId, label, QString(), gatewayToThingId[deviceUrl.host()]);
+                            ThingDescriptor descriptor(rollershutterThingClassId, label, QString(), accountId);
                             descriptor.setParams(ParamList() << Param(rollershutterThingDeviceUrlParamTypeId, deviceUrl));
                             unknownDevices.append(descriptor);
                         }
@@ -95,7 +92,7 @@ void IntegrationPluginSomfyTahoma::setupThing(ThingSetupInfo *info)
                                 qCDebug(dcSomfyTahoma()) << "Found existing venetian blind:" << label << deviceUrl;
                             } else {
                                 qCInfo(dcSomfyTahoma()) << "Found new venetian blind:" << label << deviceUrl;
-                                ThingDescriptor descriptor(venetianblindThingClassId, label, QString(), gatewayToThingId[deviceUrl.host()]);
+                                ThingDescriptor descriptor(venetianblindThingClassId, label, QString(), accountId);
                                 descriptor.setParams(ParamList() << Param(venetianblindThingDeviceUrlParamTypeId, deviceUrl));
                                 unknownDevices.append(descriptor);
                             }
@@ -127,6 +124,23 @@ void IntegrationPluginSomfyTahoma::postSetupThing(Thing *thing)
         pluginStorage()->endGroup();
 
         refreshAccount(thing);
+    }
+
+    // Set parent of all devices to the respective gateway. We create all devices in setup() of the account.
+    // But we don't have the ThingIds of the gateways, because they're created in setup() as well.
+    QUrl deviceUrl;
+    if (thing->thingClassId() == rollershutterThingClassId) {
+        deviceUrl = QUrl(thing->paramValue(rollershutterThingDeviceUrlParamTypeId).toString());
+    } else if (thing->thingClassId() == venetianblindThingClassId) {
+        deviceUrl = QUrl(thing->paramValue(venetianblindThingDeviceUrlParamTypeId).toString());
+    }
+    if (!deviceUrl.isEmpty()) {
+        Thing *gateway = myThings().findByParams(ParamList() << Param(gatewayThingGatewayIdParamTypeId, deviceUrl.host()));
+        if (gateway) {
+            thing->setParentId(gateway->parentId());
+        } else {
+            qCWarning(dcSomfyTahoma()) << "Couldn't find gateway for thing" << thing;
+        }
     }
 }
 
