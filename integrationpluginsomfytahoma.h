@@ -46,6 +46,7 @@ private:
     void handleEvents(const QVariantList &eventList);
     void updateThingStates(const QString &deviceUrl, const QVariantList &stateList);
     void markDisconnected(Thing *thing);
+    void restoreChildConnectedState(Thing *thing);
 
 private:
     QMap<Thing *, PluginTimer *> m_eventPollTimer;

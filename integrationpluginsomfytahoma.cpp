@@ -165,6 +165,9 @@ void IntegrationPluginSomfyTahoma::refreshAccount(Thing *thing)
             if (thing) {
                 qCDebug(dcSomfyTahoma()) << "Setting initial state for gateway:" << gatewayId;
                 thing->setStateValue(gatewayConnectedStateTypeId, gatewayMap["connectivity"].toMap()["status"] == "OK");
+                pluginStorage()->beginGroup(thing->id().toString());
+                pluginStorage()->setValue("connected", gatewayMap["connectivity"].toMap()["status"] == "OK");
+                pluginStorage()->endGroup();
             }
         }
         foreach (const QVariant &deviceVariant, result.toMap()["devices"].toList()) {
@@ -204,6 +207,7 @@ void IntegrationPluginSomfyTahoma::refreshAccount(Thing *thing)
             });
             connect(eventFetchRequest, &SomfyTahomaEventFetchRequest::finished, thing, [this, thing](const QVariant &result){
                 thing->setStateValue(tahomaConnectedStateTypeId, true);
+                restoreChildConnectedState(thing);
                 if (!result.toList().empty()) {
                     qCDebug(dcSomfyTahoma()) << "Got events:" << result;
                 }
@@ -275,7 +279,10 @@ void IntegrationPluginSomfyTahoma::handleEvents(const QVariantList &eventList)
             if (thing) {
                 qCInfo(dcSomfyTahoma()) << "Gateway connected event received:" << eventMap["gatewayId"];
                 thing->setStateValue(gatewayConnectedStateTypeId, true);
-                refreshAccount(myThings().findById(thing->parentId()));
+                pluginStorage()->beginGroup(thing->id().toString());
+                pluginStorage()->setValue("connected", true);
+                pluginStorage()->endGroup();
+                restoreChildConnectedState(thing);
             } else {
                 qCWarning(dcSomfyTahoma()) << "Ignoring gateway connected event for unknown gateway" << eventMap["gatewayId"];
             }
@@ -284,6 +291,9 @@ void IntegrationPluginSomfyTahoma::handleEvents(const QVariantList &eventList)
             if (thing) {
                 qCInfo(dcSomfyTahoma()) << "Gateway disconnected event received:" << eventMap["gatewayId"];
                 thing->setStateValue(gatewayConnectedStateTypeId, false);
+                pluginStorage()->beginGroup(thing->id().toString());
+                pluginStorage()->setValue("connected", false);
+                pluginStorage()->endGroup();
                 markDisconnected(thing);
             } else {
                 qCWarning(dcSomfyTahoma()) << "Ignoring gateway disconnected event for unknown gateway" << eventMap["gatewayId"];
@@ -302,6 +312,9 @@ void IntegrationPluginSomfyTahoma::updateThingStates(const QString &deviceUrl, c
                 thing->setStateValue(rollershutterPercentageStateTypeId, stateMap["value"]);
             } else if (stateMap["name"] == "core:StatusState") {
                 thing->setStateValue(rollershutterConnectedStateTypeId, stateMap["value"] == "available");
+                pluginStorage()->beginGroup(thing->id().toString());
+                pluginStorage()->setValue("connected", stateMap["value"] == "available");
+                pluginStorage()->endGroup();
             } else if (stateMap["name"] == "core:RSSILevelState") {
                 thing->setStateValue(rollershutterSignalStrengthStateTypeId, stateMap["value"]);
             }
@@ -320,6 +333,9 @@ void IntegrationPluginSomfyTahoma::updateThingStates(const QString &deviceUrl, c
                 thing->setStateValue(venetianblindAngleStateTypeId, degree);
             } else if (stateMap["name"] == "core:StatusState") {
                 thing->setStateValue(venetianblindConnectedStateTypeId, stateMap["value"] == "available");
+                pluginStorage()->beginGroup(thing->id().toString());
+                pluginStorage()->setValue("connected", stateMap["value"] == "available");
+                pluginStorage()->endGroup();
             } else if (stateMap["name"] == "core:RSSILevelState") {
                 thing->setStateValue(venetianblindSignalStrengthStateTypeId, stateMap["value"]);
             }
@@ -410,7 +426,25 @@ void IntegrationPluginSomfyTahoma::markDisconnected(Thing *thing)
     } else if (thing->thingClassId() == venetianblindThingClassId) {
         thing->setStateValue(venetianblindConnectedStateTypeId, false);
     }
-    foreach (Thing *thing, myThings().filterByParentId(thing->id())) {
-        markDisconnected(thing);
+    foreach (Thing *child, myThings().filterByParentId(thing->id())) {
+        markDisconnected(child);
+    }
+}
+
+void IntegrationPluginSomfyTahoma::restoreChildConnectedState(Thing *thing)
+{
+    pluginStorage()->beginGroup(thing->id().toString());
+    if (pluginStorage()->contains("connected")) {
+        if (thing->thingClassId() == gatewayThingClassId) {
+            thing->setStateValue(gatewayConnectedStateTypeId, pluginStorage()->value("connected").toBool());
+        } else if (thing->thingClassId() == rollershutterThingClassId) {
+            thing->setStateValue(rollershutterConnectedStateTypeId, pluginStorage()->value("connected").toBool());
+        } else if (thing->thingClassId() == venetianblindThingClassId) {
+            thing->setStateValue(venetianblindConnectedStateTypeId, pluginStorage()->value("connected").toBool());
+        }
+    }
+    pluginStorage()->endGroup();
+    foreach (Thing *child, myThings().filterByParentId(thing->id())) {
+        restoreChildConnectedState(child);
     }
 }
