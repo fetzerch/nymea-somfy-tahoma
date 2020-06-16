@@ -1,7 +1,5 @@
 # nymea-somfy-tahoma
 
-🚧 This project is work-in-progress!
-
 Plugin for the [nymea](https://github.com/nymea/nymea) IoT platform to
 control Somfy roller shutters and blinds through the Somfy Tahoma API.
 
