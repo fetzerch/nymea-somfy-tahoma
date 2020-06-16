@@ -388,7 +388,7 @@ void IntegrationPluginSomfyTahoma::executeAction(ThingActionInfo *info)
     if (!actionName.isEmpty()) {
         QJsonDocument jsonRequest{QJsonObject
         {
-            {"label", "test command"},
+            {"label", info->thing()->name()},
             {"actions", QJsonArray{QJsonObject{{"deviceURL", deviceUrl},
                                                {"commands", QJsonArray{QJsonObject{{"name", actionName},
                                                                                    {"parameters", actionParameters}}}}}}}
