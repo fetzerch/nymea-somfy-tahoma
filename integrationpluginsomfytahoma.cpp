@@ -87,16 +87,15 @@ void IntegrationPluginSomfyTahoma::setupThing(ThingSetupInfo *info)
                             unknownDevices.append(descriptor);
                         }
                     } else if (type == QStringLiteral("ExteriorVenetianBlind")) {
-                            Thing *thing = myThings().findByParams(ParamList() << Param(venetianblindThingDeviceUrlParamTypeId, deviceUrl));
-                            if (thing) {
-                                qCDebug(dcSomfyTahoma()) << "Found existing venetian blind:" << label << deviceUrl;
-                            } else {
-                                qCInfo(dcSomfyTahoma()) << "Found new venetian blind:" << label << deviceUrl;
-                                ThingDescriptor descriptor(venetianblindThingClassId, label, QString(), accountId);
-                                descriptor.setParams(ParamList() << Param(venetianblindThingDeviceUrlParamTypeId, deviceUrl));
-                                unknownDevices.append(descriptor);
-                            }
-
+                        Thing *thing = myThings().findByParams(ParamList() << Param(venetianblindThingDeviceUrlParamTypeId, deviceUrl));
+                        if (thing) {
+                            qCDebug(dcSomfyTahoma()) << "Found existing venetian blind:" << label << deviceUrl;
+                        } else {
+                            qCInfo(dcSomfyTahoma()) << "Found new venetian blind:" << label << deviceUrl;
+                            ThingDescriptor descriptor(venetianblindThingClassId, label, QString(), accountId);
+                            descriptor.setParams(ParamList() << Param(venetianblindThingDeviceUrlParamTypeId, deviceUrl));
+                            unknownDevices.append(descriptor);
+                        }
                     } else {
                         qCInfo(dcSomfyTahoma()) << "Found unsupperted Somfy device:" << label << type << deviceUrl;
                     }
