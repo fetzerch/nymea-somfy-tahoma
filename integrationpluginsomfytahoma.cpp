@@ -98,7 +98,7 @@ void IntegrationPluginSomfyTahoma::setupThing(ThingSetupInfo *info)
                             }
 
                     } else {
-                        qCDebug(dcSomfyTahoma()) << "Found unsupperted Somfy device:" << label << type << deviceUrl;
+                        qCInfo(dcSomfyTahoma()) << "Found unsupperted Somfy device:" << label << type << deviceUrl;
                     }
                 }
                 if (!unknownDevices.isEmpty()) {
@@ -189,7 +189,7 @@ void IntegrationPluginSomfyTahoma::refreshAccount(Thing *thing)
             connect(eventFetchRequest, &SomfyTahomaEventFetchRequest::error, thing, [this, thing](QNetworkReply::NetworkError error){
                 markDisconnected(thing);
                 if (error == QNetworkReply::AuthenticationRequiredError) {
-                    qCWarning(dcSomfyTahoma()) << "Failed to fetch events: Authentication expired, reauthenticating";
+                    qCInfo(dcSomfyTahoma()) << "Failed to fetch events: Authentication expired, reauthenticating";
                     SomfyTahomaLoginRequest *request = createLoginRequestWithStoredCredentials(thing);
                     connect(request, &SomfyTahomaLoginRequest::error, this, [this, thing](){
                         // This is a fatal error. The user needs to reconfigure the account to provide new credentials.
@@ -209,7 +209,7 @@ void IntegrationPluginSomfyTahoma::refreshAccount(Thing *thing)
                 thing->setStateValue(tahomaConnectedStateTypeId, true);
                 restoreChildConnectedState(thing);
                 if (!result.toList().empty()) {
-                    qCDebug(dcSomfyTahoma()) << "Got events:" << result;
+                    qCDebug(dcSomfyTahoma()) << "Got events:" << qUtf8Printable(QJsonDocument::fromVariant(result).toJson());
                 }
                 handleEvents(result.toList());
             });
@@ -234,29 +234,25 @@ void IntegrationPluginSomfyTahoma::handleEvents(const QVariantList &eventList)
             foreach (const QVariant &action, eventMap["actions"].toList()) {
                 thing = myThings().findByParams(ParamList() << Param(rollershutterThingDeviceUrlParamTypeId, action.toMap()["deviceURL"]));
                 if (thing) {
-                    qCInfo(dcSomfyTahoma()) << "Roller shutter execution registered. Setting moving state.";
                     thing->setStateValue(rollershutterMovingStateTypeId, true);
                     things.append(thing);
                     continue;
                 }
                 thing = myThings().findByParams(ParamList() << Param(venetianblindThingDeviceUrlParamTypeId, action.toMap()["deviceURL"]));
                 if (thing) {
-                    qCInfo(dcSomfyTahoma()) << "Venetian blind execution registered. Setting moving state.";
                     thing->setStateValue(venetianblindMovingStateTypeId, true);
                     things.append(thing);
                 }
             }
-            qCInfo(dcSomfyTahoma()) << "ExecutionRegisteredEvent" << eventMap["execId"];
+            qCDebug(dcSomfyTahoma()) << "ExecutionRegisteredEvent" << eventMap["execId"];
             m_currentExecutions.insert(eventMap["execId"].toString(), things);
         } else if (eventMap["name"] == "ExecutionStateChangedEvent" &&
                    (eventMap["newState"] == "COMPLETED" || eventMap["newState"] == "FAILED")) {
             QList<Thing *> things = m_currentExecutions.take(eventMap["execId"].toString());
             foreach (Thing *thing, things) {
                 if (thing->thingClassId() == rollershutterThingClassId) {
-                    qCInfo(dcSomfyTahoma()) << "Roller shutter execution finished. Clearing moving state.";
                     thing->setStateValue(rollershutterMovingStateTypeId, false);
                 } else if (thing->thingClassId() == venetianblindThingClassId) {
-                    qCInfo(dcSomfyTahoma()) << "Venetian blind execution finished. Clearing moving state.";
                     thing->setStateValue(venetianblindMovingStateTypeId, false);
                 }
             }
@@ -264,10 +260,10 @@ void IntegrationPluginSomfyTahoma::handleEvents(const QVariantList &eventList)
             QPointer<ThingActionInfo> thingActionInfo = m_pendingActions.take(eventMap["execId"].toString());
             if (!thingActionInfo.isNull()) {
                 if (eventMap["newState"] == "COMPLETED") {
-                    qCInfo(dcSomfyTahoma()) << "Action finished" << thingActionInfo->thing() << thingActionInfo->action().actionTypeId();
+                    qCDebug(dcSomfyTahoma()) << "Action finished" << thingActionInfo->thing() << thingActionInfo->action().actionTypeId();
                     thingActionInfo->finish(Thing::ThingErrorNoError);
                 } else if (eventMap["newState"] == "FAILED") {
-                    qCInfo(dcSomfyTahoma()) << "Action failed" << thingActionInfo->thing() << thingActionInfo->action().actionTypeId();
+                    qCWarning(dcSomfyTahoma()) << "Action failed" << thingActionInfo->thing() << thingActionInfo->action().actionTypeId();
                     thingActionInfo->finish(Thing::ThingErrorHardwareFailure);
                 } else {
                     qCWarning(dcSomfyTahoma()) << "Action in unknown state" << thingActionInfo->thing() << thingActionInfo->action().actionTypeId() << eventMap["newState"].toString();
@@ -284,7 +280,7 @@ void IntegrationPluginSomfyTahoma::handleEvents(const QVariantList &eventList)
                 pluginStorage()->endGroup();
                 restoreChildConnectedState(thing);
             } else {
-                qCWarning(dcSomfyTahoma()) << "Ignoring gateway connected event for unknown gateway" << eventMap["gatewayId"];
+                qCDebug(dcSomfyTahoma()) << "Ignoring gateway connected event for unknown gateway" << eventMap["gatewayId"];
             }
         } else if (eventMap["name"] == "GatewayDownEvent") {
             thing = myThings().findByParams(ParamList() << Param(gatewayThingGatewayIdParamTypeId, eventMap["gatewayId"]));
@@ -296,7 +292,7 @@ void IntegrationPluginSomfyTahoma::handleEvents(const QVariantList &eventList)
                 pluginStorage()->endGroup();
                 markDisconnected(thing);
             } else {
-                qCWarning(dcSomfyTahoma()) << "Ignoring gateway disconnected event for unknown gateway" << eventMap["gatewayId"];
+                qCDebug(dcSomfyTahoma()) << "Ignoring gateway disconnected event for unknown gateway" << eventMap["gatewayId"];
             }
         }
     }
